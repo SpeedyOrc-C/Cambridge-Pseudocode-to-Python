@@ -1,0 +1,10 @@
+pi <- 0
+n <- 100
+i <- 1
+
+WHILE i <= 100 DO
+    pi <- pi + 1 / i^2
+    i <- i + 1
+ENDWHILE
+
+OUTPUT (pi * 6) ^ 0.5
