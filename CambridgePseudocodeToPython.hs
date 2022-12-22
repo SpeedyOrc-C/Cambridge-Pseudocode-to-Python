@@ -110,7 +110,7 @@ data CpFlow
     | CpIf CpExpr CpFlow
     | CpIfElse CpExpr CpFlow CpFlow
     | CpWhile CpExpr CpFlow
-    | CpDoWhile CpFlow CpExpr
+    | CpRepeat CpFlow CpExpr
     | CpFor CpExpr CpExpr CpExpr CpFlow
     | CpForStep CpExpr CpExpr CpExpr CpExpr CpFlow
     deriving Show
@@ -362,6 +362,14 @@ cpWhileP = (\_ _ _ condition _ _ _ loopClause _ _ _ _ ->
     manySpaceP <*> strP "ENDWHILE" <*> manySpaceP
     <*> lineBreak
 
+cpRepeatP :: Parser CpFlow
+cpRepeatP = (\_ _ _ loopClause _ _ _ condition _ _ ->
+        CpRepeat loopClause condition)
+    <$>
+    manySpaceP <*> strP "REPEAT" <*> (manySpaceP <* optional lineBreak)
+    <*> cpFlowP <*>
+    manySpaceP <*> strP "UNTIL" <*> manySpaceP <*> cpExprP <*> manySpaceP
+    <*> lineBreak
 
 cpFlowP :: Parser CpFlow
 cpFlowP = CpFlow
@@ -369,6 +377,7 @@ cpFlowP = CpFlow
             cpIfP
         <|> cpIfElseP
         <|> cpWhileP
+        <|> cpRepeatP
         <|> cpStatementsP
     )
 
@@ -444,6 +453,20 @@ instance DumpPython CpFlow where
                 indent indentation ++ "while " ++ dumpE condition ++ ":\n" ++
                     loopClauseOutput ++
                 afterEndwhileOutput
+
+    dump (  state@(TranslatorState indentation),
+            CpFlow ((CpRepeat loopClause condition):tail)) =
+        (state, output)
+        where
+            (_, loopClauseOutput) = 
+                dump (TranslatorState (indentation+1), loopClause)
+            (_, afterUntilOutput) = dump (state, CpFlow tail)
+            
+            output = 
+                indent indentation ++ "while True:\n" ++
+                    loopClauseOutput ++
+                indent (indentation + 1) ++ "if " ++ dumpE condition ++ ": break\n" ++
+                afterUntilOutput
 
 
 instance DumpPythonIgnoreIndentation CpStatement where

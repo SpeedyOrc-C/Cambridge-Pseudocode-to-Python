@@ -2,9 +2,12 @@ pi <- 0
 n <- 100
 i <- 1
 
-WHILE i <= 100 DO
+REPEAT
     pi <- pi + 1 / i^2
+    IF MOD(i, 2) = 0 THEN
+        OUTPUT "哈哈哈"
+    ENDIF
     i <- i + 1
-ENDWHILE
+UNTIL i > n
 
 OUTPUT (pi * 6) ^ 0.5
