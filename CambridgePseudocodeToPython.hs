@@ -1,12 +1,14 @@
 {-# LANGUAGE LambdaCase #-}
-module CambridgePseudocodeToPython () where
+module CambridgePseudocodeToPython (cpFlowP, dump, initialTranslatorState) where
 
 import MyParser
 import Control.Applicative (optional, many, some, (<|>))
 import Debug.Trace (trace)
+import Data.List (intercalate, intersperse)
+
 import Control.Monad (when)
 import Data.Maybe (fromJust, isNothing, isJust)
-import Data.List (intercalate, intersperse)
+import System.Environment (getArgs)
 
 
 alphaUpper :: String
@@ -49,6 +51,8 @@ instance HasPriority CpExpr where
     priority (CpGreaterEqual _ _) = 5
     priority (CpEqual _ _) = 6
     priority (CpNotEqual _ _) = 6
+    priority (CpAnd _ _) = 7
+    priority (CpOr _ _) = 8
     priority _ = 0
 
 
@@ -144,22 +148,18 @@ cpInBracketP :: Parser CpExpr
 cpInBracketP = charP '(' *> manySpaceP *> cpExprP <* manySpaceP <* charP ')'
 
 cpVariableP :: Parser CpExpr
-cpVariableP = CpVariable <$> variableStrP
+cpVariableP = CpVariable <$> ((:) <$> charPredicateP (`elem` '_':alpha) <*> spanP (`elem` '_':alpha++numeric))
 
-variableStrP :: Parser [Char]
-variableStrP = (:) <$>
-    charPredicateP (`elem` ':':alpha) <*> spanP (`elem` ':':alpha++numeric)
-    
 cpFunctionP :: Parser CpExpr
 cpFunctionP
-    = (\f _ _ _ params _ _ -> case f of {
+    = (\(CpVariable f) _ _ _ params _ _ -> case f of {
         -- Built-in functions go here
         "DIV" -> let (x:y:_) = params in CpIntDivide x y;
         "MOD" -> let (x:y:_) = params in CpModulus x y;
         -- Not built-in
         _ -> CpFunction f params;
     })
-    <$> variableStrP
+    <$> cpVariableP
     <*> manySpaceP
     <*> charP '('
     <*> manySpaceP
@@ -227,10 +227,11 @@ cpTermP =
     foldl (flip($)) <$> cpFactorP <*> many (
         (\_ op _ expr -> case op of {
             "+" -> flip CpAdd expr;
+            "&" -> flip CpAdd expr;
             "-" -> flip CpSubtract expr;
             _ -> undefined;
         }) <$> manySpaceP
-        <*> (strP "+" <|> strP "-")
+        <*> (strP "+" <|> strP "-" <|> strP "&")
         <*> manySpaceP
         <*> cpFactorP
     )
@@ -272,6 +273,28 @@ cpOrP = foldl (flip($)) <$> cpAndP <*> many (
 cpExprP :: Parser CpExpr
 cpExprP = cpOrP
 
+cpTypeArrayP :: Parser CpType
+cpTypeArrayP =
+    (\_ _ _ _ (CpInt from) _ _ _ (CpInt to) _ _ _ _ _ elementType ->
+        CpTypeArray from to elementType)
+    <$> strP "ARRAY" <*> manySpaceP
+    <*> charP '[' <*> manySpaceP
+    <*> cpIntP <*> manySpaceP
+    <*> (charP ':' <|> charP ',') <*> manySpaceP
+    <*> cpIntP <*> manySpaceP
+    <*> charP ']' <*> manySpaceP
+    <*> strP "OF" <*> manySpaceP
+    <*> cpTypeP
+
+cpTypeP :: Parser CpType
+cpTypeP =
+        CpTypeInteger   <$ strP "INTEGER"
+    <|> CpTypeReal      <$ strP "REAL"
+    <|> CpTypeBoolean   <$ strP "BOOLEAN"
+    <|> CpTypeChar      <$ strP "CHAR"
+    <|> CpTypeString    <$ strP "STRING"
+    <|> cpTypeArrayP
+
 
 -- Statement parser ------------------------------------------------------------
 cpAssignP :: Parser CpStatement
@@ -292,10 +315,10 @@ cpOutputP =
 
 cpInputP :: Parser CpStatement
 cpInputP =
-    (\_ _ variable -> CpInput (CpVariable variable))
+    (\_ _ (CpVariable variable) -> CpInput (CpVariable variable))
     <$> strP "INPUT"
     <*> manySpaceP
-    <*> variableStrP
+    <*> cpVariableP
 
 cpFunctionCallP :: Parser CpStatement
 cpFunctionCallP =
@@ -307,6 +330,16 @@ cpFunctionCallP =
 cpBlankLineP :: Parser CpStatement
 cpBlankLineP = CpBlankLine <$ manySpaceP
 
+cpDeclareP :: Parser CpStatement
+cpDeclareP = 
+    (\_ _ variable _ _ _ variableType ->
+        CpDeclare variable variableType)
+    <$> strP "DECLARE"
+    <*> manySpaceP
+    <*> cpVariableP
+    <*> manySpaceP <*> charP ':' <*> manySpaceP
+    <*> cpTypeP
+
 cpStatementP :: Parser CpStatement
 cpStatementP =
     manySpaceP *> (
@@ -314,6 +347,7 @@ cpStatementP =
     <|> cpFunctionCallP
     <|> cpOutputP
     <|> cpInputP
+    <|> cpDeclareP
     <|> cpBlankLineP
     )
     <* manySpaceP
@@ -371,6 +405,27 @@ cpRepeatP = (\_ _ _ loopClause _ _ _ condition _ _ ->
     manySpaceP <*> strP "UNTIL" <*> manySpaceP <*> cpExprP <*> manySpaceP
     <*> lineBreak
 
+cpForP :: Parser CpFlow
+cpForP = (\_ _ _ (CpAssign variable from) _ _ _ to _ loopClause _ _ _ _ ->
+        CpFor variable from to loopClause)
+    <$>
+    manySpaceP <*> strP "FOR" <*> manySpaceP <*> cpAssignP <*> manySpaceP
+    <*> strP "TO" <*> manySpaceP <*> cpIntP <*> (manySpaceP <* optional lineBreak)
+    <*> cpFlowP <*>
+    manySpaceP <*> (strP "NEXT" <|> strP "ENDFOR") <*> manySpaceP
+    <*> lineBreak
+
+cpForStepP :: Parser CpFlow
+cpForStepP = (\_ _ _ (CpAssign variable from) _ _ _ to _  _ _ step _ loopClause _ _ _ _ ->
+        CpForStep variable from to step loopClause)
+    <$>
+    manySpaceP <*> strP "FOR" <*> manySpaceP <*> cpAssignP <*> manySpaceP
+    <*> strP "TO" <*> manySpaceP <*> cpIntP <*> manySpaceP
+    <*> strP "STEP" <*> manySpaceP <*> cpIntP <*> (manySpaceP <* optional lineBreak)
+    <*> cpFlowP <*>
+    manySpaceP <*> (strP "NEXT" <|> strP "ENDFOR") <*> manySpaceP
+    <*> lineBreak
+
 cpFlowP :: Parser CpFlow
 cpFlowP = CpFlow
     <$> many (
@@ -378,6 +433,8 @@ cpFlowP = CpFlow
         <|> cpIfElseP
         <|> cpWhileP
         <|> cpRepeatP
+        <|> cpForP
+        <|> cpForStepP
         <|> cpStatementsP
     )
 
@@ -403,6 +460,19 @@ instance DumpPython CpFlow where
             (nextState, output) = dump (state, head)
             (next2state, next2output) = dump (nextState, CpFlow tail)
 
+    -- Python cannot declare array. Array must be initialised before access.
+    dump (  state@(TranslatorState indentation),
+            CpFlow ((CpSingleStatement (CpDeclare variable arrayType@(CpTypeArray from to _))):tail)) =
+        (   state,
+            indent indentation ++ declarationOutput ++ "\n" ++
+            indent indentation ++ initialisationOutput ++ "\n" ++
+            nextOutput)
+        where
+            declarationOutput = dumpE variable ++ ": " ++ dumpE arrayType
+            initialisationOutput =
+                dumpE variable ++
+                " = [... for _ in range(" ++ from ++ ", " ++ to ++ "+1)]"
+            (nextState, nextOutput) = dump (state, CpFlow tail)
 
     dump (state@(TranslatorState indentation),
           CpFlow ((CpSingleStatement statement):tail)) =
@@ -468,6 +538,34 @@ instance DumpPython CpFlow where
                 indent (indentation + 1) ++ "if " ++ dumpE condition ++ ": break\n" ++
                 afterUntilOutput
 
+    dump (  state@(TranslatorState indentation),
+            CpFlow ((CpFor variable from to loopClause):tail)) =
+        (state, output)
+        where
+            (_, loopClauseOutput) =
+                dump (TranslatorState (indentation+1), loopClause)
+            (_, afterNextOutput) = dump (state, CpFlow tail)
+
+            output =
+                indent indentation ++ "for " ++ dumpE variable ++ " in range(" ++
+                dumpE from ++ ", " ++ dumpE to ++ "+1):\n" ++
+                    loopClauseOutput ++
+                afterNextOutput
+    
+    dump (  state@(TranslatorState indentation),
+            CpFlow ((CpForStep variable from to step loopClause):tail)) =
+        (state, output)
+        where
+            (_, loopClauseOutput) =
+                dump (TranslatorState (indentation+1), loopClause)
+            (_, afterNextOutput) = dump (state, CpFlow tail)
+
+            output =
+                indent indentation ++ "for " ++ dumpE variable ++ " in range(" ++
+                dumpE from ++ ", " ++ dumpE to ++ "+1, " ++ dumpE step ++ "):\n" ++
+                    loopClauseOutput ++
+                afterNextOutput
+
 
 instance DumpPythonIgnoreIndentation CpStatement where
     dumpE :: CpStatement -> String
@@ -490,7 +588,11 @@ instance DumpPythonIgnoreIndentation CpStatement where
     dumpE (CpFunctionCall expr) = output where
         output = dumpE expr
 
+    dumpE (CpDeclare variable variableType) = output where
+        output = dumpE variable ++ ": " ++ dumpE variableType
+
     dumpE CpBlankLine = ""
+
 
 instance DumpPythonIgnoreIndentation CpExpr where
     dumpE :: CpExpr -> String
@@ -640,11 +742,35 @@ instance DumpPythonIgnoreIndentation CpExpr where
             " != " ++
             encloseBracket expr expr2 right
 
+    dumpE expr@(CpAnd expr1 expr2) = output where
+        left = dumpE expr1
+        right = dumpE expr2
+        output =
+            encloseBracket expr expr1 left ++
+            " and " ++
+            encloseBracket expr expr2 right
+
+    dumpE expr@(CpOr expr1 expr2) = output where
+        left = dumpE expr1
+        right = dumpE expr2
+        output =
+            encloseBracket expr expr1 left ++
+            " or " ++
+            encloseBracket expr expr2 right
+
 encloseBracket :: Ord a => a -> a -> String -> String
 encloseBracket outside inside dumpedInside =
     if outside >= inside
     then dumpedInside
     else "(" ++ dumpedInside ++ ")"
+
+instance DumpPythonIgnoreIndentation CpType where
+    dumpE CpTypeString = "str"
+    dumpE CpTypeInteger = "int"
+    dumpE CpTypeReal = "float"
+    dumpE CpTypeBoolean = "bool"
+    dumpE CpTypeChar = "str"
+    dumpE (CpTypeArray _ _ elementType) = "list[" ++ dumpE elementType ++ "]"
 
 
 newtype TranslatorState = TranslatorState (Int) deriving Show
@@ -652,11 +778,19 @@ initialTranslatorState :: TranslatorState
 initialTranslatorState = TranslatorState (0)
 
 
+main :: IO ()
 main = do
-    raw <- readFile "test.ciepseudo"
+    let inputPath = "test.ciepseudo"
+        outputPath = inputPath ++ ".py"
+
+    raw <- readFile inputPath
     let programMaybe = run cpFlowP raw
-    when (isJust programMaybe) $ do
-        let raw@(_, program) = fromJust programMaybe 
-        print raw
-        let (_, output) = dump (initialTranslatorState, program)
-        writeFile "test.ciepseudo.py" output
+
+    if isJust programMaybe then do
+        let program = snd $ fromJust programMaybe 
+        let output = snd $ dump (initialTranslatorState, program)
+        print program
+        writeFile outputPath output
+        putStrLn $ "Complete. File generated at \"" ++ outputPath ++ "\""
+    else do
+        putStrLn "Syntax error(s) exists."
