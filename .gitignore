@@ -7,3 +7,6 @@ Main.hi
 Main.o
 MyParser.hi
 MyParser.o
+
+test.campseudo
+test.campseudo.py

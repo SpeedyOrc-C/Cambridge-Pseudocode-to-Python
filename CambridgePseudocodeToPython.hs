@@ -38,22 +38,22 @@ instance HasPriority CpExpr where
     priority :: CpExpr -> Integer
     priority (CpIndex{}) = 1
     priority (CpNot{}) = 2
-    priority (CpNegative _) = 2
-    priority (CpPower _ _) = 3
-    priority (CpMultiply _ _) = 4
-    priority (CpDivide _ _) = 4
-    priority (CpModulus _ _) = 4
-    priority (CpIntDivide _ _) = 4
-    priority (CpAdd _ _) = 5
-    priority (CpSubtract _ _) = 5
-    priority (CpLess _ _) = 6
-    priority (CpGreater _ _) = 6
-    priority (CpLessEqual _ _) = 6
-    priority (CpGreaterEqual _ _) = 6
-    priority (CpEqual _ _) = 7
-    priority (CpNotEqual _ _) = 7
-    priority (CpAnd _ _) = 8
-    priority (CpOr _ _) = 9
+    priority (CpNegative{}) = 2
+    priority (CpPower{}) = 3
+    priority (CpMultiply{}) = 4
+    priority (CpDivide{}) = 4
+    priority (CpModulus{}) = 4
+    priority (CpIntDivide{}) = 4
+    priority (CpAdd{}) = 5
+    priority (CpSubtract{}) = 5
+    priority (CpLess{}) = 6
+    priority (CpGreater{}) = 6
+    priority (CpLessEqual{}) = 6
+    priority (CpGreaterEqual{}) = 6
+    priority (CpEqual{}) = 7
+    priority (CpNotEqual{}) = 7
+    priority (CpAnd{}) = 8
+    priority (CpOr{}) = 9
     priority _ = 0
 
 
@@ -99,6 +99,7 @@ data CpType
     | CpTypeString
     | CpTypeChar
     | CpTypeArray [(CpExpr, CpExpr)] CpType
+    | CpTypeCustom CpExpr
     deriving Show
     
 data CpStatement
@@ -106,6 +107,7 @@ data CpStatement
     | CpDeclare CpExpr CpType
     | CpInput CpExpr
     | CpOutput [CpExpr]
+    | CpEnumerated CpExpr [CpExpr]
     | CpFunctionCall CpExpr
     | CpReturn CpExpr
     | CpBlankLine
@@ -120,6 +122,7 @@ data CpFlow
     | CpRepeat CpFlow CpExpr
     | CpFor CpExpr CpExpr CpExpr CpFlow
     | CpForStep CpExpr CpExpr CpExpr CpExpr CpFlow
+    | CpStruct CpExpr CpFlow
     deriving Show
 
 
@@ -207,7 +210,6 @@ cpIndexP =
         <*> cpExprP
         <*> many (manySpaceP *> charP ',' *> manySpaceP *> cpExprP) <*> manySpaceP
         <*> charP ']')
-
 
 cpUnaryP :: Parser CpExpr
 cpUnaryP = 
@@ -322,6 +324,7 @@ cpTypeP =
     <|> CpTypeChar      <$ strP "CHAR"
     <|> CpTypeString    <$ strP "STRING"
     <|> cpTypeArrayP
+    <|> CpTypeCustom    <$> cpVariableP
 
 
 -- Statement parser ------------------------------------------------------------
@@ -365,6 +368,24 @@ cpDeclareP =
     <*> manySpaceP <*> charP ':' <*> manySpaceP
     <*> cpTypeP
 
+cpEnumeratedP :: Parser CpStatement
+cpEnumeratedP =
+    (\_ _ variable _ _ _ _ _ firstConstant _ tailConstants _ _ ->
+        CpEnumerated variable (firstConstant : tailConstants))
+    <$> strP "TYPE" <*> manySpaceP
+    <*> cpVariableP <*> manySpaceP
+    <*> charP '=' <*> manySpaceP
+    -- If there are too many constants, line breaks are allowed.
+    <*> charP '(' <*> whiteSpaces
+    <*> cpVariableP <*> whiteSpaces
+    <*> many (
+            charP ',' *>  whiteSpaces
+        *>  cpVariableP <*  whiteSpaces
+    )
+    -- Allow a redundant comma after the last constant.
+    <*> optional (charP ',' <* whiteSpaces)
+    <*> charP ')'
+
 cpStatementP :: Parser CpStatement
 cpStatementP =
     manySpaceP *> (
@@ -373,6 +394,7 @@ cpStatementP =
     <|> cpOutputP
     <|> cpInputP
     <|> cpDeclareP
+    <|> cpEnumeratedP
     <|> cpBlankLineP
     )
     <* manySpaceP
@@ -384,71 +406,93 @@ cpStatementsP :: Parser CpFlow
 cpStatementsP = CpFlow <$> some (CpSingleStatement <$> cpStatementP)
 
 cpIfP :: Parser CpFlow
-cpIfP = (\_ _ _ condition _ _ _ thenClause _ _ _ _ ->
+cpIfP =
+    (\_ _ _ condition _ _ _ thenClause _ _ _ _ ->
         CpIf condition thenClause
     )
-    <$>
-    manySpaceP <*> strP "IF" <*> whiteSpaces
-    <*> cpExprP <*>
-    whiteSpaces <*> strP "THEN" <*> (manySpaceP <* optional lineBreak)
-    <*> cpFlowP <*>
-    manySpaceP <*> strP "ENDIF" <*> manySpaceP
+    <$> manySpaceP
+    <*> strP "IF" <*> whiteSpaces
+    <*> cpExprP <*> whiteSpaces
+    <*> strP "THEN" <*> (manySpaceP <* optional lineBreak)
+    <*> cpFlowP <*> manySpaceP
+    <*> strP "ENDIF" <*> manySpaceP
     <*> lineBreak
 
 cpIfElseP :: Parser CpFlow
-cpIfElseP = (\_ _ _ condition _ _ _ thenClause _ _ _ elseClause _ _ _ _ ->
+cpIfElseP =
+    (\_ _ _ condition _ _ _ thenClause _ _ _ elseClause _ _ _ _ ->
         CpIfElse condition thenClause elseClause
     )
-    <$>
-    manySpaceP <*> strP "IF" <*> whiteSpaces
-    <*> cpExprP <*>
-    whiteSpaces <*> strP "THEN" <*> (manySpaceP <* optional lineBreak)
-    <*> cpFlowP <*>
-    whiteSpaces <*> strP "ELSE" <*> (manySpaceP <* optional lineBreak)
-    <*> cpFlowP <*>
-    manySpaceP <*> strP "ENDIF" <*> manySpaceP
+    <$> manySpaceP
+    <*> strP "IF" <*> whiteSpaces
+    <*> cpExprP <*> whiteSpaces
+    <*> strP "THEN" <*> (manySpaceP <* optional lineBreak)
+    <*> cpFlowP <*> whiteSpaces
+    <*> strP "ELSE" <*> (manySpaceP <* optional lineBreak)
+    <*> cpFlowP <*> manySpaceP
+    <*> strP "ENDIF" <*> manySpaceP
     <*> lineBreak
 
 cpWhileP :: Parser CpFlow
-cpWhileP = (\_ _ _ condition _ _ _ loopClause _ _ _ _ ->
+cpWhileP =
+    (\_ _ _ condition _ _ _ loopClause _ _ _ _ ->
         CpWhile condition loopClause
     )
-    <$>
-    manySpaceP <*> strP "WHILE" <*> whiteSpaces
-    <*> cpExprP <*>
-    whiteSpaces <*> strP "DO" <*> (manySpaceP <* optional lineBreak)
-    <*> cpFlowP <*>
-    manySpaceP <*> strP "ENDWHILE" <*> manySpaceP
+    <$> manySpaceP
+    <*> strP "WHILE" <*> whiteSpaces
+    <*> cpExprP <*> whiteSpaces
+    <*> strP "DO" <*> (manySpaceP <* optional lineBreak)
+    <*> cpFlowP <*> manySpaceP
+    <*> strP "ENDWHILE" <*> manySpaceP
     <*> lineBreak
 
 cpRepeatP :: Parser CpFlow
-cpRepeatP = (\_ _ _ loopClause _ _ _ condition _ _ ->
+cpRepeatP =
+    (\_ _ _ loopClause _ _ _ condition _ _ ->
         CpRepeat loopClause condition)
-    <$>
-    manySpaceP <*> strP "REPEAT" <*> (manySpaceP <* optional lineBreak)
-    <*> cpFlowP <*>
-    manySpaceP <*> strP "UNTIL" <*> manySpaceP <*> cpExprP <*> manySpaceP
+    <$> manySpaceP
+    <*> strP "REPEAT" <*> (manySpaceP <* optional lineBreak)
+    <*> cpFlowP <*> manySpaceP
+    <*> strP "UNTIL" <*> manySpaceP
+    <*> cpExprP <*> manySpaceP
     <*> lineBreak
 
 cpForP :: Parser CpFlow
-cpForP = (\_ _ _ (CpAssign variable from) _ _ _ to _ loopClause _ _ _ _ ->
+cpForP =
+    (\_ _ _ (CpAssign variable from) _ _ _ to _ loopClause _ _ _ _ ->
         CpFor variable from to loopClause)
-    <$>
-    manySpaceP <*> strP "FOR" <*> manySpaceP <*> cpAssignP <*> manySpaceP
-    <*> strP "TO" <*> manySpaceP <*> cpIntP <*> (manySpaceP <* optional lineBreak)
-    <*> cpFlowP <*>
-    manySpaceP <*> (strP "NEXT" <|> strP "ENDFOR") <*> manySpaceP
+    <$> manySpaceP
+    <*> strP "FOR" <*> manySpaceP
+    <*> cpAssignP <*> manySpaceP
+    <*> strP "TO" <*> manySpaceP
+    <*> cpIntP <*> (manySpaceP <* optional lineBreak)
+    <*> cpFlowP <*> manySpaceP
+    <*> (strP "NEXT" <|> strP "ENDFOR") <*> manySpaceP
     <*> lineBreak
 
 cpForStepP :: Parser CpFlow
-cpForStepP = (\_ _ _ (CpAssign variable from) _ _ _ to _  _ _ step _ loopClause _ _ _ _ ->
+cpForStepP =
+    (\_ _ _ (CpAssign variable from) _ _ _ to _  _ _ step _ loopClause _ _ _ _ ->
         CpForStep variable from to step loopClause)
-    <$>
-    manySpaceP <*> strP "FOR" <*> manySpaceP <*> cpAssignP <*> manySpaceP
-    <*> strP "TO" <*> manySpaceP <*> cpIntP <*> manySpaceP
-    <*> strP "STEP" <*> manySpaceP <*> cpIntP <*> (manySpaceP <* optional lineBreak)
-    <*> cpFlowP <*>
-    manySpaceP <*> (strP "NEXT" <|> strP "ENDFOR") <*> manySpaceP
+    <$> manySpaceP
+    <*> strP "FOR" <*> manySpaceP
+    <*> cpAssignP <*> manySpaceP
+    <*> strP "TO" <*> manySpaceP
+    <*> cpIntP <*> manySpaceP
+    <*> strP "STEP" <*> manySpaceP
+    <*> cpIntP <*> (manySpaceP <* optional lineBreak)
+    <*> cpFlowP <*> manySpaceP
+    <*> (strP "NEXT" <|> strP "ENDFOR") <*> manySpaceP
+    <*> lineBreak
+
+cpStructP :: Parser CpFlow
+cpStructP = 
+    (\_ _ _ name _ declareClauses _ _ _ _ -> CpStruct name declareClauses)
+    <$> manySpaceP
+    <*> strP "TYPE" <*> whiteSpaces
+    <*> cpVariableP <*> (manySpaceP <* optional lineBreak)
+    <*> cpFlowP <*> manySpaceP
+    <*> strP "ENDTYPE" <*> manySpaceP
     <*> lineBreak
 
 cpFlowP :: Parser CpFlow
@@ -460,6 +504,7 @@ cpFlowP = CpFlow
         <|> cpRepeatP
         <|> cpForP
         <|> cpForStepP
+        <|> cpStructP
         <|> cpStatementsP
     )
 
@@ -467,7 +512,6 @@ cpFlowP = CpFlow
 -- Dump to Python --------------------------------------------------------------
 class DumpPython program where
     dump :: (State, program) -> (State, String)
-    -- dump (Ignore Indentation)
     
 class DumpPythonStateless expr where
     dumpE :: expr -> String
@@ -491,7 +535,7 @@ instance DumpPython CpFlow where
                 (CpSingleStatement
                     (CpDeclare
                         variable
-                        arrayType@(CpTypeArray dimensions _)
+                        arrayType@(CpTypeArray dimensions elementType)
                     )
                 ):tail)) =
         (   state,
@@ -500,20 +544,30 @@ instance DumpPython CpFlow where
             nextOutput)
         where
             declarationOutput = dumpE variable ++ ": " ++ dumpE arrayType
+            initialiseObject = case elementType of {
+                CpTypeInteger -> "0";
+                CpTypeReal -> "0.0";
+                CpTypeBoolean -> "False";
+                CpTypeChar -> "''";
+                CpTypeString -> "''";
+                CpTypeCustom (CpVariable customType) -> customType ++ "()";
+                _ -> "...";
+            }
             initialisationOutput =
                 dumpE variable ++
                 " = " ++
                 concat (replicate (length dimensions) "[") ++
+                
                 if length dimensions == 1 then
                     let (from, to) = head dimensions in
-                    "... for _ in range(" ++
+                    initialiseObject ++ " for _ in range(" ++
                     dumpE from ++
                     ", " ++
                     dumpE to ++ "+1)]"
                 else
                     -- If this is an multi-dimensional array,
                     -- add a line break for each dimension
-                    "...\n" ++
+                    initialiseObject ++ "\n" ++
                     intercalate "\n" (
                         (\(from, to) ->
                             indent (indentation+1) ++
@@ -523,14 +577,52 @@ instance DumpPython CpFlow where
                                 dumpE to ++ "+1)]")
                         <$> reverse dimensions)
 
-            (nextState, nextOutput) = dump (state, CpFlow tail)
+            (_, nextOutput) = dump (state, CpFlow tail)
+
+    dump (  state@(State indentation),
+            CpFlow (
+                (CpSingleStatement
+                    (CpDeclare
+                        variable
+                        arrayType@(CpTypeCustom customTypeName)
+                    )
+                ):tail)) =
+        (   state,
+            indent indentation ++ declarationOutput ++ "\n" ++
+            indent indentation ++ initialisationOutput ++ "\n" ++
+            nextOutput)
+        where
+            declarationOutput = dumpE variable ++ ": " ++ dumpE arrayType
+            initialisationOutput =
+                dumpE variable ++ " = " ++ dumpE customTypeName ++ "()"
+
+            (_, nextOutput) = dump (state, CpFlow tail)
+    
+    dump (state@(State indentation),
+          CpFlow ((
+            CpSingleStatement(
+                CpEnumerated variable constants)):tail)) =
+        (state, output ++ nextOutput)
+        where
+            output =
+                indent indentation ++
+                "# " ++ dumpE variable ++ " - Enumerated\n" ++
+                indent indentation ++
+                "class " ++ dumpE variable ++ ": pass # Placeholder\n" ++
+
+                concatMap (\constant ->
+                    indent indentation ++
+                    "class " ++ dumpE constant ++ ": pass\n")
+                constants
+
+            (_, nextOutput) = dump (state, CpFlow tail)
 
     dump (state@(State indentation),
           CpFlow ((CpSingleStatement statement):tail)) =
         (state, indent indentation ++ output ++ "\n" ++ nextOutput)
         where
             output = dumpE statement
-            (nextState, nextOutput) = dump (state, CpFlow tail)
+            (_, nextOutput) = dump (state, CpFlow tail)
     
     dump (  state@(State indentation),
             CpFlow ((CpIf condition thenClause):tail)) =
@@ -618,23 +710,32 @@ instance DumpPython CpFlow where
                 afterNextOutput
 
 
+    dump(   state@(State indentation),
+            CpFlow ((CpStruct name declareClauses):tail)) = 
+        (state, output)
+        where
+            (_, declareClausesOutput) =
+                dump (State (indentation+1), declareClauses)
+            (_, afterEndtypeOutput) = dump (state, CpFlow tail)
+
+            output = 
+                indent indentation ++ "class " ++ dumpE name ++ ":\n" ++
+                declareClausesOutput ++ afterEndtypeOutput
+
 instance DumpPythonStateless CpStatement where
     dumpE :: CpStatement -> String
-    dumpE (CpOutput exprs) = output
-        where
-            content = intercalate ", " $ dumpE <$> exprs
-            output = "print(" ++ content ++ ")"
+    dumpE (CpOutput exprs) = output where
+        content = intercalate ", " $ dumpE <$> exprs
+        output = "print(" ++ content ++ ")"
 
-    dumpE (CpInput expr) = output
-        where
-            variable = dumpE expr
-            output = variable ++ " = input()"
+    dumpE (CpInput expr) = output where
+        variable = dumpE expr
+        output = variable ++ " = input()"
         
-    dumpE (CpAssign expr1 expr2) = output
-        where
-            variable = dumpE expr1
-            value = dumpE expr2
-            output = variable ++ " = " ++ value
+    dumpE (CpAssign expr1 expr2) = output where
+        variable = dumpE expr1
+        value = dumpE expr2
+        output = variable ++ " = " ++ value
     
     dumpE (CpFunctionCall expr) = output where
         output = dumpE expr
@@ -821,15 +922,18 @@ encloseBracket outside inside dumpedInside =
     else "(" ++ dumpedInside ++ ")"
 
 instance DumpPythonStateless CpType where
-    dumpE CpTypeString = "str"
+    dumpE CpTypeString  = "str"
     dumpE CpTypeInteger = "int"
-    dumpE CpTypeReal = "float"
+    dumpE CpTypeReal    = "float"
     dumpE CpTypeBoolean = "bool"
-    dumpE CpTypeChar = "str"
+    dumpE CpTypeChar    = "str"
+
     dumpE (CpTypeArray shape elementType) =
         concat (replicate (length shape) "list[") ++
         dumpE elementType ++
         concat (replicate (length shape) "]")
+    
+    dumpE (CpTypeCustom typeName) = dumpE typeName
 
 
 newtype State = State (Int) deriving Show
@@ -839,16 +943,18 @@ initialState = State (0)
 
 main :: IO ()
 main = do
-    let inputPath = "test.ciepseudo"
+    let inputPath = "test.campseudo"
         outputPath = inputPath ++ ".py"
 
     raw <- readFile inputPath
     let programMaybe = run cpFlowP raw
 
     if isJust programMaybe then do
-        let program = snd $ fromJust programMaybe 
+        let (rest, program) = fromJust programMaybe 
         let output = snd $ dump (initialState, program)
         print program
+        putStrLn rest
+        putStrLn output
         writeFile outputPath output
         putStrLn $ "Complete. File generated at \"" ++ outputPath ++ "\""
     else do
