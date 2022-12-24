@@ -1,7 +1,7 @@
 module Main (main) where
 
 import MyParser (run)
-import CambridgePseudocodeToPython ( cpFlowP, dump, initialTranslatorState )
+import CambridgePseudocodeToPython ( cpFlowP, dump, initialState )
 
 import Data.Maybe (fromJust, isJust)
 import System.Environment (getArgs)
@@ -20,7 +20,7 @@ main = do
 
         if isJust programMaybe then do
             let program = snd $ fromJust programMaybe 
-            let output = snd $ dump (initialTranslatorState, program)
+            let output = snd $ dump (initialState, program)
             writeFile outputPath output
             putStrLn $ "Complete. File generated at \"" ++ outputPath ++ "\""
         else do

@@ -1,12 +1,14 @@
-pi = 0
-n = 100
-i = 1
+score: list[int]
+score = [... for _ in range(1, 5+1)]
 
-while True:
-    pi = pi + 1 / i ** 2
-    if i % 2 == 0:
-        print("哈哈哈")
-    i = i + 1
-    if i > n: break
+for i in range(0, 4+1):
+    s = input()
+    score[i] = int(s)
 
-print((pi * 6) ** 0.5)
+mean: float
+mean = 0
+for i in range(0, 4+1):
+    mean = mean + score[i]
+mean = mean / 5
+
+print("Mean score:", mean)

@@ -1,13 +1,15 @@
-pi <- 0
-n <- 100
-i <- 1
+DECLARE score : ARRAY[1:5] OF INTEGER
 
-REPEAT
-    pi <- pi + 1 / i^2
-    IF MOD(i, 2) = 0 THEN
-        OUTPUT "哈哈哈"
-    ENDIF
-    i <- i + 1
-UNTIL i > n
+FOR i <- 0 TO 4
+    INPUT s
+    score[i] <- int(s)
+NEXT
 
-OUTPUT (pi * 6) ^ 0.5
+DECLARE mean : REAL
+mean <- 0
+FOR i <- 0 TO 4
+    mean <- mean + score[i]
+NEXT
+mean <- mean / 5
+
+OUTPUT "Mean score:", mean

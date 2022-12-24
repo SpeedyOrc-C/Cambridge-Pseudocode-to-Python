@@ -1,5 +1,5 @@
 {-# LANGUAGE LambdaCase #-}
-module CambridgePseudocodeToPython (cpFlowP, dump, initialTranslatorState) where
+module CambridgePseudocodeToPython (cpFlowP, dump, initialState) where
 
 import MyParser
 import Control.Applicative (optional, many, some, (<|>))
@@ -36,23 +36,24 @@ instance Ord CpExpr where
 
 instance HasPriority CpExpr where
     priority :: CpExpr -> Integer
-    priority (CpNot _) = 1
-    priority (CpNegative _) = 1
-    priority (CpPower _ _) = 2
-    priority (CpMultiply _ _) = 3
-    priority (CpDivide _ _) = 3
-    priority (CpModulus _ _) = 3
-    priority (CpIntDivide _ _) = 3
-    priority (CpAdd _ _) = 4
-    priority (CpSubtract _ _) = 4
-    priority (CpLess _ _) = 5
-    priority (CpGreater _ _) = 5
-    priority (CpLessEqual _ _) = 5
-    priority (CpGreaterEqual _ _) = 5
-    priority (CpEqual _ _) = 6
-    priority (CpNotEqual _ _) = 6
-    priority (CpAnd _ _) = 7
-    priority (CpOr _ _) = 8
+    priority (CpIndex{}) = 1
+    priority (CpNot{}) = 2
+    priority (CpNegative _) = 2
+    priority (CpPower _ _) = 3
+    priority (CpMultiply _ _) = 4
+    priority (CpDivide _ _) = 4
+    priority (CpModulus _ _) = 4
+    priority (CpIntDivide _ _) = 4
+    priority (CpAdd _ _) = 5
+    priority (CpSubtract _ _) = 5
+    priority (CpLess _ _) = 6
+    priority (CpGreater _ _) = 6
+    priority (CpLessEqual _ _) = 6
+    priority (CpGreaterEqual _ _) = 6
+    priority (CpEqual _ _) = 7
+    priority (CpNotEqual _ _) = 7
+    priority (CpAnd _ _) = 8
+    priority (CpOr _ _) = 9
     priority _ = 0
 
 
@@ -87,6 +88,8 @@ data CpExpr
     | CpGreaterEqual CpExpr CpExpr  -- >=
     | CpEqual CpExpr CpExpr         -- =
     | CpNotEqual CpExpr CpExpr      -- <>
+    
+    | CpIndex CpExpr [CpExpr]
     deriving Show
 
 data CpType
@@ -95,7 +98,7 @@ data CpType
     | CpTypeBoolean
     | CpTypeString
     | CpTypeChar
-    | CpTypeArray String String CpType
+    | CpTypeArray [(CpExpr, CpExpr)] CpType
     deriving Show
     
 data CpStatement
@@ -148,7 +151,10 @@ cpInBracketP :: Parser CpExpr
 cpInBracketP = charP '(' *> manySpaceP *> cpExprP <* manySpaceP <* charP ')'
 
 cpVariableP :: Parser CpExpr
-cpVariableP = CpVariable <$> ((:) <$> charPredicateP (`elem` '_':alpha) <*> spanP (`elem` '_':alpha++numeric))
+cpVariableP =
+    CpVariable <$> ((:)
+        <$> charPredicateP (`elem` '_':alpha)
+        <*> spanP (`elem` '_':alpha++numeric))
 
 cpFunctionP :: Parser CpExpr
 cpFunctionP
@@ -189,6 +195,19 @@ cpPrimaryP
     <|> cpVariableP
     <|> cpInBracketP
 
+cpIndexP :: Parser CpExpr
+cpIndexP =
+    foldl (flip($))
+    <$> cpPrimaryP
+    <*> many (
+        (\_ _ _ firstIndex tailIndices _ _ ->
+            flip CpIndex (firstIndex:tailIndices))
+        <$> manySpaceP
+        <*> charP '[' <*> manySpaceP
+        <*> cpExprP
+        <*> many (manySpaceP *> charP ',' *> manySpaceP *> cpExprP) <*> manySpaceP
+        <*> charP ']')
+
 
 cpUnaryP :: Parser CpExpr
 cpUnaryP = 
@@ -198,7 +217,7 @@ cpUnaryP =
             "-" -> CpNegative;
         }) <$> ops
         )
-    ) <$> many ((strP "NOT" <|> strP "-") <* manySpaceP) <*> cpPrimaryP
+    ) <$> many ((strP "NOT" <|> strP "-") <* manySpaceP) <*> cpIndexP
 
 cpPowerP :: Parser CpExpr
 cpPowerP =
@@ -240,12 +259,15 @@ cpCompareP :: Parser CpExpr
 cpCompareP = 
     foldl (flip($)) <$> cpTermP <*> many (
         (\_ op _ expr -> case op of {
-            "<" -> flip CpLess expr;
+            -- "< " must have a space or the translator will recognise it as "<-"
+            "< " -> flip CpLess expr;
             ">" -> flip CpGreater expr;
             "<=" -> flip CpLessEqual expr;
             ">=" -> flip CpGreaterEqual expr;
             _ -> undefined;
-        }) <$> manySpaceP <*> (strP "<=" <|> strP ">=" <|> strP "<" <|> strP ">") <*> manySpaceP <*> cpTermP
+        }) <$> manySpaceP
+        <*> (strP "<=" <|> strP ">=" <|> strP "< " <|> strP ">") <*> manySpaceP
+        <*> cpTermP
     )
 
 cpEqualityP :: Parser CpExpr
@@ -275,16 +297,22 @@ cpExprP = cpOrP
 
 cpTypeArrayP :: Parser CpType
 cpTypeArrayP =
-    (\_ _ _ _ (CpInt from) _ _ _ (CpInt to) _ _ _ _ _ elementType ->
-        CpTypeArray from to elementType)
+    (\_ _ _ _ headDimension tailDimensions _ _ _ _ _ elementType ->
+        CpTypeArray (headDimension : tailDimensions) elementType)
     <$> strP "ARRAY" <*> manySpaceP
     <*> charP '[' <*> manySpaceP
-    <*> cpIntP <*> manySpaceP
-    <*> (charP ':' <|> charP ',') <*> manySpaceP
-    <*> cpIntP <*> manySpaceP
+    <*> arrayDimensionP
+    <*> many (manySpaceP *> charP ',' *> manySpaceP *> arrayDimensionP) <*> manySpaceP
     <*> charP ']' <*> manySpaceP
     <*> strP "OF" <*> manySpaceP
     <*> cpTypeP
+
+arrayDimensionP :: Parser (CpExpr, CpExpr)
+arrayDimensionP = 
+    (\from _ _ _ to -> (from, to))
+    <$> cpExprP <*> manySpaceP
+    <*> (charP ':' <|> charP ',') <*> manySpaceP
+    <*> cpExprP
 
 cpTypeP :: Parser CpType
 cpTypeP =
@@ -300,25 +328,22 @@ cpTypeP =
 cpAssignP :: Parser CpStatement
 cpAssignP =
     (\var _ _ _ expr -> CpAssign var expr)
-    <$> cpVariableP
-    <*> manySpaceP
-    <*> strP "<-"
-    <*> manySpaceP
+    <$> cpExprP <*> manySpaceP
+    <*> strP "<-" <*> manySpaceP
     <*> cpExprP
 
 cpOutputP :: Parser CpStatement
 cpOutputP =
     (\_ _ params -> CpOutput params)
-    <$> strP "OUTPUT"
-    <*> manySpaceP
+    <$> strP "OUTPUT" <*> manySpaceP
     <*> parametersP
 
 cpInputP :: Parser CpStatement
 cpInputP =
-    (\_ _ (CpVariable variable) -> CpInput (CpVariable variable))
+    (\_ _ variable -> CpInput variable)
     <$> strP "INPUT"
     <*> manySpaceP
-    <*> cpVariableP
+    <*> cpExprP
 
 cpFunctionCallP :: Parser CpStatement
 cpFunctionCallP =
@@ -441,17 +466,17 @@ cpFlowP = CpFlow
 
 -- Dump to Python --------------------------------------------------------------
 class DumpPython program where
-    dump :: (TranslatorState, program) -> (TranslatorState, String)
+    dump :: (State, program) -> (State, String)
     -- dump (Ignore Indentation)
     
-class DumpPythonIgnoreIndentation expr where
+class DumpPythonStateless expr where
     dumpE :: expr -> String
 
 indent :: Int -> String
 indent n = replicate (4*n) ' '
 
 instance DumpPython CpFlow where
-    dump :: (TranslatorState, CpFlow) -> (TranslatorState, String)
+    dump :: (State, CpFlow) -> (State, String)
     dump (state, CpFlow []) = (state, "")
 
     dump (state, CpFlow (head@(CpFlow _) : tail)) =
@@ -461,8 +486,14 @@ instance DumpPython CpFlow where
             (next2state, next2output) = dump (nextState, CpFlow tail)
 
     -- Python cannot declare array. Array must be initialised before access.
-    dump (  state@(TranslatorState indentation),
-            CpFlow ((CpSingleStatement (CpDeclare variable arrayType@(CpTypeArray from to _))):tail)) =
+    dump (  state@(State indentation),
+            CpFlow (
+                (CpSingleStatement
+                    (CpDeclare
+                        variable
+                        arrayType@(CpTypeArray dimensions _)
+                    )
+                ):tail)) =
         (   state,
             indent indentation ++ declarationOutput ++ "\n" ++
             indent indentation ++ initialisationOutput ++ "\n" ++
@@ -471,22 +502,42 @@ instance DumpPython CpFlow where
             declarationOutput = dumpE variable ++ ": " ++ dumpE arrayType
             initialisationOutput =
                 dumpE variable ++
-                " = [... for _ in range(" ++ from ++ ", " ++ to ++ "+1)]"
+                " = " ++
+                concat (replicate (length dimensions) "[") ++
+                if length dimensions == 1 then
+                    let (from, to) = head dimensions in
+                    "... for _ in range(" ++
+                    dumpE from ++
+                    ", " ++
+                    dumpE to ++ "+1)]"
+                else
+                    -- If this is an multi-dimensional array,
+                    -- add a line break for each dimension
+                    "...\n" ++
+                    intercalate "\n" (
+                        (\(from, to) ->
+                            indent (indentation+1) ++
+                            "for _ in range(" ++
+                                dumpE from ++
+                                ", " ++
+                                dumpE to ++ "+1)]")
+                        <$> reverse dimensions)
+
             (nextState, nextOutput) = dump (state, CpFlow tail)
 
-    dump (state@(TranslatorState indentation),
+    dump (state@(State indentation),
           CpFlow ((CpSingleStatement statement):tail)) =
         (state, indent indentation ++ output ++ "\n" ++ nextOutput)
         where
             output = dumpE statement
             (nextState, nextOutput) = dump (state, CpFlow tail)
     
-    dump (  state@(TranslatorState indentation),
+    dump (  state@(State indentation),
             CpFlow ((CpIf condition thenClause):tail)) =
         (state, output)
         where
             (_, thenClauseOutput) =
-                dump (TranslatorState (indentation+1), thenClause)
+                dump (State (indentation+1), thenClause)
             (_, afterEndIfOutput) = dump (state, CpFlow tail)
 
             output =
@@ -494,14 +545,14 @@ instance DumpPython CpFlow where
                     thenClauseOutput ++
                 afterEndIfOutput
 
-    dump (  state@(TranslatorState indentation),
+    dump (  state@(State indentation),
             CpFlow ((CpIfElse condition thenClause elseClause):tail)) =
         (state, output)
         where
             (_, thenClauseOutput) =
-                dump (TranslatorState (indentation+1), thenClause)
+                dump (State (indentation+1), thenClause)
             (_, elseClauseOutput) = 
-                dump (TranslatorState (indentation+1), elseClause)
+                dump (State (indentation+1), elseClause)
             (_, afterEndIfOutput) = dump (state, CpFlow tail)
 
             output =
@@ -511,12 +562,12 @@ instance DumpPython CpFlow where
                     elseClauseOutput ++
                 afterEndIfOutput
 
-    dump (  state@(TranslatorState indentation),
+    dump (  state@(State indentation),
             CpFlow ((CpWhile condition loopClause):tail)) =
         (state, output)
         where
             (_, loopClauseOutput) =
-                dump (TranslatorState (indentation+1), loopClause)
+                dump (State (indentation+1), loopClause)
             (_, afterEndwhileOutput) = dump (state, CpFlow tail)
 
             output =
@@ -524,12 +575,12 @@ instance DumpPython CpFlow where
                     loopClauseOutput ++
                 afterEndwhileOutput
 
-    dump (  state@(TranslatorState indentation),
+    dump (  state@(State indentation),
             CpFlow ((CpRepeat loopClause condition):tail)) =
         (state, output)
         where
             (_, loopClauseOutput) = 
-                dump (TranslatorState (indentation+1), loopClause)
+                dump (State (indentation+1), loopClause)
             (_, afterUntilOutput) = dump (state, CpFlow tail)
             
             output = 
@@ -538,12 +589,12 @@ instance DumpPython CpFlow where
                 indent (indentation + 1) ++ "if " ++ dumpE condition ++ ": break\n" ++
                 afterUntilOutput
 
-    dump (  state@(TranslatorState indentation),
+    dump (  state@(State indentation),
             CpFlow ((CpFor variable from to loopClause):tail)) =
         (state, output)
         where
             (_, loopClauseOutput) =
-                dump (TranslatorState (indentation+1), loopClause)
+                dump (State (indentation+1), loopClause)
             (_, afterNextOutput) = dump (state, CpFlow tail)
 
             output =
@@ -552,12 +603,12 @@ instance DumpPython CpFlow where
                     loopClauseOutput ++
                 afterNextOutput
     
-    dump (  state@(TranslatorState indentation),
+    dump (  state@(State indentation),
             CpFlow ((CpForStep variable from to step loopClause):tail)) =
         (state, output)
         where
             (_, loopClauseOutput) =
-                dump (TranslatorState (indentation+1), loopClause)
+                dump (State (indentation+1), loopClause)
             (_, afterNextOutput) = dump (state, CpFlow tail)
 
             output =
@@ -567,7 +618,7 @@ instance DumpPython CpFlow where
                 afterNextOutput
 
 
-instance DumpPythonIgnoreIndentation CpStatement where
+instance DumpPythonStateless CpStatement where
     dumpE :: CpStatement -> String
     dumpE (CpOutput exprs) = output
         where
@@ -594,7 +645,7 @@ instance DumpPythonIgnoreIndentation CpStatement where
     dumpE CpBlankLine = ""
 
 
-instance DumpPythonIgnoreIndentation CpExpr where
+instance DumpPythonStateless CpExpr where
     dumpE :: CpExpr -> String
     dumpE (CpInt integer) = integer
     dumpE (CpFloat integerPart decimalPart) = integerPart ++ "." ++ decimalPart
@@ -606,6 +657,11 @@ instance DumpPythonIgnoreIndentation CpExpr where
     dumpE (CpFunction functionName exprs) = output where
         params = intercalate ", " $ dumpE <$> exprs
         output = functionName ++ "(" ++ params ++ ")"
+
+    dumpE expr@(CpIndex expr1 indices) = output where
+        output =
+            dumpE expr1 ++
+            concatMap (\index -> "[" ++ dumpE index ++ "]") indices
 
     dumpE expr@(CpNot expr1) = "not " ++ encloseBracket expr expr1 (dumpE expr1)
     dumpE (CpNegative expr) = "-" ++ dumpE expr
@@ -764,18 +820,21 @@ encloseBracket outside inside dumpedInside =
     then dumpedInside
     else "(" ++ dumpedInside ++ ")"
 
-instance DumpPythonIgnoreIndentation CpType where
+instance DumpPythonStateless CpType where
     dumpE CpTypeString = "str"
     dumpE CpTypeInteger = "int"
     dumpE CpTypeReal = "float"
     dumpE CpTypeBoolean = "bool"
     dumpE CpTypeChar = "str"
-    dumpE (CpTypeArray _ _ elementType) = "list[" ++ dumpE elementType ++ "]"
+    dumpE (CpTypeArray shape elementType) =
+        concat (replicate (length shape) "list[") ++
+        dumpE elementType ++
+        concat (replicate (length shape) "]")
 
 
-newtype TranslatorState = TranslatorState (Int) deriving Show
-initialTranslatorState :: TranslatorState
-initialTranslatorState = TranslatorState (0)
+newtype State = State (Int) deriving Show
+initialState :: State
+initialState = State (0)
 
 
 main :: IO ()
@@ -788,7 +847,7 @@ main = do
 
     if isJust programMaybe then do
         let program = snd $ fromJust programMaybe 
-        let output = snd $ dump (initialTranslatorState, program)
+        let output = snd $ dump (initialState, program)
         print program
         writeFile outputPath output
         putStrLn $ "Complete. File generated at \"" ++ outputPath ++ "\""
