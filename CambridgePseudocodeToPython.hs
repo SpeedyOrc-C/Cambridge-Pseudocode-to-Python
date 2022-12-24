@@ -7,8 +7,7 @@ import Debug.Trace (trace)
 import Data.List (intercalate, intersperse)
 
 import Control.Monad (when)
-import Data.Maybe (fromJust, isNothing, isJust)
-import System.Environment (getArgs)
+import Data.Maybe (fromJust, isJust)
 
 
 alphaUpper :: String
@@ -208,8 +207,10 @@ cpIndexP =
         <$> manySpaceP
         <*> charP '[' <*> manySpaceP
         <*> cpExprP
-        <*> many (manySpaceP *> charP ',' *> manySpaceP *> cpExprP) <*> manySpaceP
-        <*> charP ']')
+        <*> many (manySpaceP *> charP ',' *> manySpaceP *> cpExprP)
+        <*> manySpaceP
+        <*> charP ']'
+    )
 
 cpUnaryP :: Parser CpExpr
 cpUnaryP = 
@@ -219,13 +220,17 @@ cpUnaryP =
             "-" -> CpNegative;
         }) <$> ops
         )
-    ) <$> many ((strP "NOT" <|> strP "-") <* manySpaceP) <*> cpIndexP
+    )
+    <$> many ((strP "NOT" <|> strP "-") <* manySpaceP)
+    <*> cpIndexP
 
 cpPowerP :: Parser CpExpr
 cpPowerP =
     foldl (flip($)) <$> cpUnaryP <*> many (
         (\_ op _ expr -> flip CpPower expr)
-        <$> manySpaceP <*> strP "^" <*> manySpaceP <*> cpUnaryP
+        <$> manySpaceP
+        <*> strP "^" <*> manySpaceP
+        <*> cpUnaryP
     )
 
 cpFactorP :: Parser CpExpr
@@ -237,8 +242,14 @@ cpFactorP =
             "MOD" -> flip CpModulus expr;
             "DIV" -> flip CpIntDivide expr;
             _ -> undefined;
-        }) <$> manySpaceP
-        <*> (strP "*" <|> strP "/" <|> strP "MOD" <|> strP "DIV")
+        })
+        <$> manySpaceP
+        <*> (
+                strP "*"
+            <|> strP "/"
+            <|> strP "MOD"
+            <|> strP "DIV"
+        )
         <*> manySpaceP
         <*> cpPowerP
     )
@@ -251,8 +262,13 @@ cpTermP =
             "&" -> flip CpAdd expr;
             "-" -> flip CpSubtract expr;
             _ -> undefined;
-        }) <$> manySpaceP
-        <*> (strP "+" <|> strP "-" <|> strP "&")
+        })
+        <$> manySpaceP
+        <*> (
+                strP "+"
+            <|> strP "-"
+            <|> strP "&"
+        )
         <*> manySpaceP
         <*> cpFactorP
     )
@@ -267,8 +283,15 @@ cpCompareP =
             "<=" -> flip CpLessEqual expr;
             ">=" -> flip CpGreaterEqual expr;
             _ -> undefined;
-        }) <$> manySpaceP
-        <*> (strP "<=" <|> strP ">=" <|> strP "< " <|> strP ">") <*> manySpaceP
+        })
+        <$> manySpaceP
+        <*> (
+                strP "<="
+            <|> strP ">="
+            <|> strP "< "
+            <|> strP ">"
+        )
+        <*> manySpaceP
         <*> cpTermP
     )
 
@@ -279,19 +302,30 @@ cpEqualityP =
             "=" -> flip CpEqual expr;
             "<>" -> flip CpNotEqual expr;
             _ -> undefined;
-        }) <$> manySpaceP <*> (strP "=" <|> strP "<>") <*> manySpaceP <*> cpCompareP
+        })
+        <$> manySpaceP
+        <*> (
+                strP "="
+            <|> strP "<>"
+        )
+        <*> manySpaceP
+        <*> cpCompareP
     )
 
 cpAndP :: Parser CpExpr
 cpAndP = foldl (flip($)) <$> cpEqualityP <*> many (
         (\_ op _ expr -> flip CpAnd expr)
-        <$> manySpaceP <*> strP "AND" <*> manySpaceP <*> cpEqualityP
+        <$> manySpaceP
+        <*> strP "AND" <*> manySpaceP
+        <*> cpEqualityP
     )
 
 cpOrP :: Parser CpExpr
 cpOrP = foldl (flip($)) <$> cpAndP <*> many (
         (\_ op _ expr -> flip CpOr expr)
-        <$> manySpaceP <*> strP "OR" <*> manySpaceP <*> cpAndP
+        <$> manySpaceP
+        <*> strP "OR"
+        <*> manySpaceP <*> cpAndP
     )
 
 cpExprP :: Parser CpExpr
@@ -304,7 +338,8 @@ cpTypeArrayP =
     <$> strP "ARRAY" <*> manySpaceP
     <*> charP '[' <*> manySpaceP
     <*> arrayDimensionP
-    <*> many (manySpaceP *> charP ',' *> manySpaceP *> arrayDimensionP) <*> manySpaceP
+    <*> many (manySpaceP *> charP ',' *> manySpaceP *> arrayDimensionP)
+    <*> manySpaceP
     <*> charP ']' <*> manySpaceP
     <*> strP "OF" <*> manySpaceP
     <*> cpTypeP
@@ -344,15 +379,13 @@ cpOutputP =
 cpInputP :: Parser CpStatement
 cpInputP =
     (\_ _ variable -> CpInput variable)
-    <$> strP "INPUT"
-    <*> manySpaceP
+    <$> strP "INPUT" <*> manySpaceP
     <*> cpExprP
 
 cpFunctionCallP :: Parser CpStatement
 cpFunctionCallP =
     (\_ _ f -> CpFunctionCall f)
-    <$> strP "CALL"
-    <*> manySpaceP
+    <$> strP "CALL" <*> manySpaceP
     <*> cpFunctionP
 
 cpBlankLineP :: Parser CpStatement
@@ -362,10 +395,9 @@ cpDeclareP :: Parser CpStatement
 cpDeclareP = 
     (\_ _ variable _ _ _ variableType ->
         CpDeclare variable variableType)
-    <$> strP "DECLARE"
-    <*> manySpaceP
-    <*> cpVariableP
-    <*> manySpaceP <*> charP ':' <*> manySpaceP
+    <$> strP "DECLARE" <*> manySpaceP
+    <*> cpVariableP <*> manySpaceP
+    <*> charP ':' <*> manySpaceP
     <*> cpTypeP
 
 cpEnumeratedP :: Parser CpStatement
@@ -379,8 +411,8 @@ cpEnumeratedP =
     <*> charP '(' <*> whiteSpaces
     <*> cpVariableP <*> whiteSpaces
     <*> many (
-            charP ',' *>  whiteSpaces
-        *>  cpVariableP <*  whiteSpaces
+            charP ',' *> whiteSpaces
+        *>  cpVariableP <* whiteSpaces
     )
     -- Allow a redundant comma after the last constant.
     <*> optional (charP ',' <* whiteSpaces)
@@ -389,13 +421,13 @@ cpEnumeratedP =
 cpStatementP :: Parser CpStatement
 cpStatementP =
     manySpaceP *> (
-        cpAssignP
-    <|> cpFunctionCallP
-    <|> cpOutputP
-    <|> cpInputP
-    <|> cpDeclareP
-    <|> cpEnumeratedP
-    <|> cpBlankLineP
+            cpAssignP
+        <|> cpFunctionCallP
+        <|> cpOutputP
+        <|> cpInputP
+        <|> cpDeclareP
+        <|> cpEnumeratedP
+        <|> cpBlankLineP
     )
     <* manySpaceP
     <* lineBreak
@@ -936,11 +968,12 @@ instance DumpPythonStateless CpType where
     dumpE (CpTypeCustom typeName) = dumpE typeName
 
 
-newtype State = State (Int) deriving Show
+newtype State = State Int deriving Show
 initialState :: State
-initialState = State (0)
+initialState = State 0
 
 
+-- Main function for testing only ----------------------------------------------
 main :: IO ()
 main = do
     let inputPath = "test.campseudo"

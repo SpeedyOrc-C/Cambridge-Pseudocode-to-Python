@@ -6,11 +6,13 @@ import CambridgePseudocodeToPython ( cpFlowP, dump, initialState )
 import Data.Maybe (fromJust, isJust)
 import System.Environment (getArgs)
 
+
 main :: IO ()
 main = do
     args <- getArgs
     if null args then
         putStrLn "No input file specified."
+
     else do
         let inputPath = head args
             outputPath = inputPath ++ ".py"
@@ -23,5 +25,5 @@ main = do
             let output = snd $ dump (initialState, program)
             writeFile outputPath output
             putStrLn $ "Complete. File generated at \"" ++ outputPath ++ "\""
-        else do
+        else
             putStrLn "Syntax error(s) exists."
