@@ -24,6 +24,5 @@ main = do
             let program = snd $ fromJust programMaybe 
             let output = snd $ dump (initialState, program)
             writeFile outputPath output
-            putStrLn $ "Complete. File generated at \"" ++ outputPath ++ "\""
         else
             putStrLn "Syntax error(s) exists."
