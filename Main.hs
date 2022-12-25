@@ -14,15 +14,20 @@ main = do
         putStrLn "No input file specified."
 
     else do
-        let inputPath = head args
-            outputPath = inputPath ++ ".py"
+        let firstArg = head args
+        if firstArg == "--help" || firstArg == "-h" then
+            putStrLn "Usage: campseudo-to-py <pseudocode_source_code>"
+        else do
 
-        raw <- readFile inputPath
-        let programMaybe = run cpFlowP raw
+            let inputPath = firstArg
+                outputPath = inputPath ++ ".py"
 
-        if isJust programMaybe then do
-            let program = snd $ fromJust programMaybe 
-            let output = snd $ dump (initialState, program)
-            writeFile outputPath output
-        else
-            putStrLn "Syntax error(s) exists."
+            raw <- readFile inputPath
+            let programMaybe = run cpFlowP raw
+
+            if isJust programMaybe then do
+                let program = snd $ fromJust programMaybe 
+                let output = snd $ dump (initialState, program)
+                writeFile outputPath output
+            else
+                putStrLn "Syntax error(s) exists."
