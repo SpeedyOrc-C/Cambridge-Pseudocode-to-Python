@@ -8,6 +8,32 @@ into a Python script.
 The adopted pseudocode language is from GCSE and Advanced Level's
 computer science textbook.
 
+## How to Use?
+
+### Compile
+
+1. Install [Glasgow Haskell Compiler](https://www.haskell.org/ghc/).
+2. Run `compile.sh`.
+3. An executable `campseudo-to-py` will be generated.
+
+### Translate Pseudocode
+
+```sh
+./campseudo-to-py <pseudocode_source_code>
+```
+
+e.g. If the source file is `hello.whatever`,
+then `hello.whatever.py` will be generated.
+
+### Run Pseudocode
+
+1. Install [Python](https://www.python.org/downloads/).
+2. Run the following command:
+```sh
+sh run.sh <pseudocode_source_code>
+```
+3. It generates the Python script, and it is executed afterwards.
+
 ## Language Feature Supported
 
 ### Data Type
@@ -63,5 +89,3 @@ Too many side effect! No pointers allowed!
 - [ ] `CLOSEFILE`
 
 ### Built-in Functions
-
-
