@@ -2,7 +2,7 @@
 module CambridgePseudocodeToPython (cpFlowP, dump, initialState) where
 
 import MyParser
-import Control.Applicative (optional, many, some, (<|>))
+import Control.Applicative (optional, many, some, (<|>), Alternative (empty))
 import Debug.Trace (trace)
 import Data.List (intercalate, intersperse)
 
@@ -121,7 +121,9 @@ data CpFlow
     | CpRepeat CpFlow CpExpr
     | CpFor CpExpr CpExpr CpExpr CpFlow
     | CpForStep CpExpr CpExpr CpExpr CpExpr CpFlow
-    | CpStruct CpExpr CpFlow
+    | CpDefineStruct CpExpr CpFlow
+    | CpDefineProcedure CpExpr [(CpExpr, CpType)] CpFlow
+    | CpDefineFunction CpExpr [(CpExpr, CpType)] CpType CpFlow
     deriving Show
 
 
@@ -160,30 +162,31 @@ cpVariableP =
 
 cpFunctionP :: Parser CpExpr
 cpFunctionP
-    = (\(CpVariable f) _ _ _ params _ _ -> case f of {
-        -- Built-in functions go here
-        "DIV" -> let (x:y:_) = params in CpIntDivide x y;
-        "MOD" -> let (x:y:_) = params in CpModulus x y;
-        -- Not built-in
-        _ -> CpFunction f params;
-    })
-    <$> cpVariableP
-    <*> manySpaceP
-    <*> charP '('
-    <*> manySpaceP
-    <*> parametersP
-    <*> manySpaceP
+    = (\(CpVariable f) _ _ _ params _ _ ->
+        case f of {
+            -- Built-in functions go here
+            "DIV" -> let (x:y:_) = params in CpIntDivide x y;
+            "MOD" -> let (x:y:_) = params in CpModulus x y;
+            -- Not built-in
+            _ -> CpFunction f params;
+        }
+    )
+    <$> cpVariableP <*> manySpaceP
+    <*> charP '(' <*> manySpaceP
+    <*> parametersP <*> manySpaceP
     <*> charP ')'
 
 parametersP :: Parser [CpExpr]
-parametersP = (:)
+parametersP =
+    ((:)
     <$> cpExprP
     <*> many (
-            manySpaceP
+            whiteSpaces
         *>  charP ','
-        *>  manySpaceP
+        *>  whiteSpaces
         *>  cpExprP
-    )
+    ))
+    <|> [] <$ passP
 
 cpPrimaryP :: Parser CpExpr
 cpPrimaryP
@@ -382,11 +385,23 @@ cpInputP =
     <$> strP "INPUT" <*> manySpaceP
     <*> cpExprP
 
+cpReturnP :: Parser CpStatement
+cpReturnP =
+    (\_ _ expr -> CpReturn expr)
+    <$> strP "RETURN" <*> manySpaceP
+    <*> cpExprP
+
 cpFunctionCallP :: Parser CpStatement
 cpFunctionCallP =
-    (\_ _ f -> CpFunctionCall f)
+    (\_ _ f -> case f of {
+        CpFunction _ _ -> CpFunctionCall f;
+        (CpVariable v) -> CpFunctionCall (CpFunction v []);
+    })
     <$> strP "CALL" <*> manySpaceP
-    <*> cpFunctionP
+    <*> (
+            cpFunctionP
+        <|> cpVariableP
+    )
 
 cpBlankLineP :: Parser CpStatement
 cpBlankLineP = CpBlankLine <$ manySpaceP
@@ -425,6 +440,7 @@ cpStatementP =
         <|> cpFunctionCallP
         <|> cpOutputP
         <|> cpInputP
+        <|> cpReturnP
         <|> cpDeclareP
         <|> cpEnumeratedP
         <|> cpBlankLineP
@@ -519,7 +535,7 @@ cpForStepP =
 
 cpStructP :: Parser CpFlow
 cpStructP = 
-    (\_ _ _ name _ declareClauses _ _ _ _ -> CpStruct name declareClauses)
+    (\_ _ _ name _ declareClauses _ _ _ _ -> CpDefineStruct name declareClauses)
     <$> manySpaceP
     <*> strP "TYPE" <*> whiteSpaces
     <*> cpVariableP <*> (manySpaceP <* optional lineBreak)
@@ -576,6 +592,8 @@ instance DumpPython CpFlow where
             nextOutput)
         where
             declarationOutput = dumpE variable ++ ": " ++ dumpE arrayType
+            -- Objects in the array should be initialised
+            -- according to their data type.
             initialiseObject = case elementType of {
                 CpTypeInteger -> "0";
                 CpTypeReal -> "0.0";
@@ -743,7 +761,7 @@ instance DumpPython CpFlow where
 
 
     dump(   state@(State indentation),
-            CpFlow ((CpStruct name declareClauses):tail)) = 
+            CpFlow ((CpDefineStruct name declareClauses):tail)) = 
         (state, output)
         where
             (_, declareClausesOutput) =
@@ -756,25 +774,14 @@ instance DumpPython CpFlow where
 
 instance DumpPythonStateless CpStatement where
     dumpE :: CpStatement -> String
-    dumpE (CpOutput exprs) = output where
-        content = intercalate ", " $ dumpE <$> exprs
-        output = "print(" ++ content ++ ")"
-
-    dumpE (CpInput expr) = output where
-        variable = dumpE expr
-        output = variable ++ " = input()"
-        
-    dumpE (CpAssign expr1 expr2) = output where
-        variable = dumpE expr1
-        value = dumpE expr2
-        output = variable ++ " = " ++ value
-    
-    dumpE (CpFunctionCall expr) = output where
-        output = dumpE expr
-
-    dumpE (CpDeclare variable variableType) = output where
-        output = dumpE variable ++ ": " ++ dumpE variableType
-
+    dumpE (CpOutput exprs) =
+        "print(" ++ intercalate ", " (dumpE <$> exprs) ++ ")"
+    dumpE (CpInput expr) = dumpE expr ++ " = input()"
+    dumpE (CpReturn expr) = "return " ++ dumpE expr
+    dumpE (CpAssign variable value) = dumpE variable ++ " = " ++ dumpE value
+    dumpE (CpFunctionCall expr) = dumpE expr
+    dumpE (CpDeclare variable variableType) =
+        dumpE variable ++ ": " ++ dumpE variableType
     dumpE CpBlankLine = ""
 
 
@@ -791,161 +798,88 @@ instance DumpPythonStateless CpExpr where
         params = intercalate ", " $ dumpE <$> exprs
         output = functionName ++ "(" ++ params ++ ")"
 
-    dumpE expr@(CpIndex expr1 indices) = output where
-        output =
-            dumpE expr1 ++
-            concatMap (\index -> "[" ++ dumpE index ++ "]") indices
+    dumpE expr@(CpIndex x indices) =
+        dumpE x ++
+        concatMap (\index -> "[" ++ dumpE index ++ "]") indices
 
-    dumpE expr@(CpNot expr1) = "not " ++ encloseBracket expr expr1 (dumpE expr1)
-    dumpE (CpNegative expr) = "-" ++ dumpE expr
+    dumpE expr@(CpNot x) = "not " ++ encloseBracket expr x (dumpE x)
+    dumpE (CpNegative x) = "-" ++ dumpE x
 
-    dumpE expr@(CpPower expr1 expr2) = output where
-        left = dumpE expr1
-        right = dumpE expr2
-        output = 
-            encloseBracket expr expr1 left ++
-            " ** " ++
-            encloseBracket expr expr2 right
+    dumpE expr@(CpPower x y) =
+        encloseBracket expr x (dumpE x) ++ " ** " ++
+        encloseBracket expr y (dumpE y)
 
-    dumpE expr@(CpMultiply expr1 expr2) = output where
-        left = dumpE expr1
-        right = dumpE expr2
-        output = 
-            encloseBracket expr expr1 left ++
-            " * " ++
-            encloseBracket expr expr2 right
+    dumpE expr@(CpMultiply x y) =
+        encloseBracket expr x (dumpE x) ++ " * " ++
+        encloseBracket expr y (dumpE y)
     
-    dumpE expr@(CpDivide expr1 expr2@(CpMultiply _ _)) = output where
-        left = dumpE expr1
-        right = dumpE expr2
-        output = 
-            encloseBracket expr expr1 left ++
-            " / (" ++ right ++ ")"
+    dumpE expr@(CpDivide x y@(CpMultiply _ _)) =
+        encloseBracket expr x (dumpE x) ++
+        " / (" ++ dumpE y ++ ")"
 
-    dumpE expr@(CpDivide expr1 expr2) = output where
-        left = dumpE expr1
-        right = dumpE expr2
-        output = 
-            encloseBracket expr expr1 left ++
-            " / " ++
-            encloseBracket expr expr2 right
+    dumpE expr@(CpDivide x y) =
+        encloseBracket expr x (dumpE x) ++ " / " ++
+        encloseBracket expr y (dumpE y)
             
-    dumpE expr@(CpIntDivide expr1 expr2@(CpMultiply _ _)) = output where
-        left = dumpE expr1
-        right = dumpE expr2
-        output = 
-            encloseBracket expr expr1 left ++
-            " // (" ++ right ++ ")"
+    dumpE expr@(CpIntDivide x y@(CpMultiply _ _)) =
+        encloseBracket expr x (dumpE x) ++
+        " // (" ++ dumpE y ++ ")"
 
-    dumpE expr@(CpIntDivide expr1 expr2) = output where
-        left = dumpE expr1
-        right = dumpE expr2
-        output = 
-            encloseBracket expr expr1 left ++
-            " // " ++
-            encloseBracket expr expr2 right
+    dumpE expr@(CpIntDivide x y) =
+        encloseBracket expr x (dumpE x) ++ " // " ++
+        encloseBracket expr y (dumpE y)
 
-    dumpE expr@(CpModulus expr1 expr2@(CpMultiply _ _)) = output where
-        left = dumpE expr1
-        right = dumpE expr2
-        output = 
-            encloseBracket expr expr1 left ++
-            " % (" ++ right ++ ")"
+    dumpE expr@(CpModulus x y@(CpMultiply _ _)) = 
+        encloseBracket expr x (dumpE x) ++
+        " % (" ++ dumpE y ++ ")"
 
-    dumpE expr@(CpModulus expr1 expr2) = output where
-        left = dumpE expr1
-        right = dumpE expr2
-        output = 
-            encloseBracket expr expr1 left ++
-            " % " ++
-            encloseBracket expr expr2 right
+    dumpE expr@(CpModulus x y) =
+        encloseBracket expr x (dumpE x) ++ " % " ++
+        encloseBracket expr y (dumpE y)
 
-    dumpE expr@(CpAdd expr1 expr2) = output where
-        left = dumpE expr1
-        right = dumpE expr2
-        output =
-            encloseBracket expr expr1 left ++
-            " + " ++
-            encloseBracket expr expr2 right
+    dumpE expr@(CpAdd x y) =
+        encloseBracket expr x (dumpE x) ++ " + " ++
+        encloseBracket expr y (dumpE y)
 
-    dumpE expr@(CpSubtract expr1 expr2@(CpAdd _ _)) = output where
-        left = dumpE expr1
-        right = dumpE expr2
-        output =
-            encloseBracket expr expr1 left ++
-            " - (" ++ right ++ ")"
+    dumpE expr@(CpSubtract x y@(CpAdd _ _)) =
+        encloseBracket expr x (dumpE x) ++
+        " - (" ++ dumpE y ++ ")"
 
-    dumpE expr@(CpSubtract expr1 expr2) = output where
-        left = dumpE expr1
-        right = dumpE expr2
-        output =
-            encloseBracket expr expr1 left ++
-            " - " ++
-            encloseBracket expr expr2 right
+    dumpE expr@(CpSubtract x y) =
+        encloseBracket expr x (dumpE x) ++ " - " ++
+        encloseBracket expr y (dumpE y)
 
-    dumpE expr@(CpLess expr1 expr2) = output where
-        left = dumpE expr1
-        right = dumpE expr2
-        output =
-            encloseBracket expr expr1 left ++
-            " < " ++
-            encloseBracket expr expr2 right
+    dumpE expr@(CpLess x y) =
+        encloseBracket expr x (dumpE x) ++ " < " ++
+        encloseBracket expr y (dumpE y)
 
-    dumpE expr@(CpGreater expr1 expr2) = output where
-        left = dumpE expr1
-        right = dumpE expr2
-        output =
-            encloseBracket expr expr1 left ++
-            " > " ++
-            encloseBracket expr expr2 right
+    dumpE expr@(CpGreater x y) =
+        encloseBracket expr x (dumpE x) ++ " > " ++
+        encloseBracket expr y (dumpE y)
 
-    dumpE expr@(CpLessEqual expr1 expr2) = output where
-        left = dumpE expr1
-        right = dumpE expr2
-        output =
-            encloseBracket expr expr1 left ++
-            " <= " ++
-            encloseBracket expr expr2 right
+    dumpE expr@(CpLessEqual x y) =
+        encloseBracket expr x (dumpE x) ++ " <= " ++
+        encloseBracket expr y (dumpE y)
 
-    dumpE expr@(CpGreaterEqual expr1 expr2) = output where
-        left = dumpE expr1
-        right = dumpE expr2
-        output =
-            encloseBracket expr expr1 left ++
-            " >= " ++
-            encloseBracket expr expr2 right
+    dumpE expr@(CpGreaterEqual x y) =
+        encloseBracket expr x (dumpE x) ++ " >= " ++
+        encloseBracket expr y (dumpE y)
 
-    dumpE expr@(CpEqual expr1 expr2) = output where
-        left = dumpE expr1
-        right = dumpE expr2
-        output =
-            encloseBracket expr expr1 left ++
-            " == " ++
-            encloseBracket expr expr2 right
+    dumpE expr@(CpEqual x y) =
+        encloseBracket expr x (dumpE x) ++ " == " ++
+        encloseBracket expr y (dumpE y)
     
-    dumpE expr@(CpNotEqual expr1 expr2) = output where
-        left = dumpE expr1
-        right = dumpE expr2
-        output =
-            encloseBracket expr expr1 left ++
-            " != " ++
-            encloseBracket expr expr2 right
+    dumpE expr@(CpNotEqual x y) =
+        encloseBracket expr x (dumpE x) ++ " != " ++
+        encloseBracket expr y (dumpE y)
 
-    dumpE expr@(CpAnd expr1 expr2) = output where
-        left = dumpE expr1
-        right = dumpE expr2
-        output =
-            encloseBracket expr expr1 left ++
-            " and " ++
-            encloseBracket expr expr2 right
+    dumpE expr@(CpAnd x y) =
+        encloseBracket expr x (dumpE x) ++ " and " ++
+        encloseBracket expr y (dumpE y)
 
-    dumpE expr@(CpOr expr1 expr2) = output where
-        left = dumpE expr1
-        right = dumpE expr2
-        output =
-            encloseBracket expr expr1 left ++
-            " or " ++
-            encloseBracket expr expr2 right
+    dumpE expr@(CpOr x y) =
+        encloseBracket expr x (dumpE x) ++ " or " ++
+        encloseBracket expr y (dumpE y)
 
 encloseBracket :: Ord a => a -> a -> String -> String
 encloseBracket outside inside dumpedInside =

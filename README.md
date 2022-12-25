@@ -18,8 +18,8 @@ computer science textbook.
 - [x] `CHAR` (by value)
 - [x] `BOOLEAN` (by value)
 - [x] `ARRAY` (by reference, multi-dimensional)
-- [x] `TYPE` (by value)
-- [x] `STRUCT` (by reference)
+- [x] `TYPE` (by value, enumerated)
+- [x] `TYPE` (by reference, composite)
 
 ### Statement
 

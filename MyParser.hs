@@ -55,6 +55,10 @@ nextP = Parser f where
     f "" = Nothing
     f (c:s) = Just (s, c)
 
+passP :: Parser ()
+passP = Parser f where
+    f input = Just (input, ())
+
 holdP :: Parser ()
 holdP = Parser f where
     f s = Just (s, ())
