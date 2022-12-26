@@ -543,6 +543,45 @@ cpStructP =
     <*> strP "ENDTYPE" <*> manySpaceP
     <*> lineBreak
 
+cpSignatureProcedure :: Parser [(CpExpr, CpType)]
+cpSignatureProcedure =
+    (:)
+    <$> cpSingleSignatureP
+    <*> many (
+            whiteSpaces *> charP ',' *> whiteSpaces
+        *>  cpSingleSignatureP
+    )
+    where
+    cpSingleSignatureP = 
+        (\variable _ _ _ variableType -> (variable, variableType))
+        <$> cpVariableP <*> whiteSpaces
+        <*> charP ':' <*> whiteSpaces
+        <*> cpTypeP
+
+cpDefineProcedure :: Parser CpFlow
+cpDefineProcedure =
+    (\_ _ _ name _ maybeSignature _ clause _ _ _ _ -> 
+        case maybeSignature of {
+            Nothing -> CpDefineProcedure  name [] clause;
+            _ -> case fromJust maybeSignature of {
+                Nothing -> CpDefineProcedure name [] clause;
+                _ -> CpDefineProcedure
+                        name (fromJust $ fromJust maybeSignature) clause
+            }
+    })
+    <$> manySpaceP
+    <*> strP "PROCEDURE" <*> whiteSpaces
+    <*> cpVariableP <*> whiteSpaces
+    <*> optional (
+            charP '(' *> whiteSpaces
+        *> optional cpSignatureProcedure <* whiteSpaces
+        <* charP ')' <* whiteSpaces
+    )
+    <*> (manySpaceP <* optional lineBreak)
+    <*> cpFlowP <*> manySpaceP
+    <*> strP "ENDPROCEDURE" <*> manySpaceP
+    <*> lineBreak
+
 cpFlowP :: Parser CpFlow
 cpFlowP = CpFlow
     <$> many (
@@ -553,6 +592,7 @@ cpFlowP = CpFlow
         <|> cpForP
         <|> cpForStepP
         <|> cpStructP
+        <|> cpDefineProcedure
         <|> cpStatementsP
     )
 
@@ -759,7 +799,6 @@ instance DumpPython CpFlow where
                     loopClauseOutput ++
                 afterNextOutput
 
-
     dump(   state@(State indentation),
             CpFlow ((CpDefineStruct name declareClauses):tail)) = 
         (state, output)
@@ -771,6 +810,21 @@ instance DumpPython CpFlow where
             output = 
                 indent indentation ++ "class " ++ dumpE name ++ ":\n" ++
                 declareClausesOutput ++ afterEndtypeOutput
+
+    dump(   state@(State indentation),
+            CpFlow ((CpDefineProcedure name signature clause):tail)) =
+        (state, output)
+        where
+            (_, clauseOutput) =
+                dump (State (indentation+1), clause)
+            (_, afterEndprocedureOutput) = dump (state, CpFlow tail)
+
+            output =
+                indent indentation ++ "def " ++ dumpE name ++ "(" ++
+                intercalate ", " ((\(param, paramType) ->
+                    dumpE param ++ ": " ++ dumpE paramType) <$> signature) ++
+                ") -> None:\n" ++
+                clauseOutput ++ afterEndprocedureOutput
 
 instance DumpPythonStateless CpStatement where
     dumpE :: CpStatement -> String
