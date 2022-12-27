@@ -1,12 +1,9 @@
 {-# LANGUAGE LambdaCase #-}
-module CambridgePseudocodeToPython (cpFlowP, dump, initialState) where
+module CambridgePseudocodeToPython (translate) where
 
 import MyParser
 import Control.Applicative (optional, many, some, (<|>), Alternative (empty))
-import Debug.Trace (trace)
 import Data.List (intercalate, intersperse)
-
-import Control.Monad (when)
 import Data.Maybe (fromJust, isJust)
 
 
@@ -89,6 +86,13 @@ data CpExpr
     | CpNotEqual CpExpr CpExpr      -- <>
     
     | CpIndex CpExpr [CpExpr]
+
+    -- Built-int functions
+    | CpBuiltinLength CpExpr
+    | CpBuiltinLeft CpExpr CpExpr
+    | CpBuiltinRight CpExpr CpExpr
+    | CpBuiltinMid CpExpr CpExpr CpExpr
+    | CpBuiltinNumToString CpExpr
     deriving Show
 
 data CpType
@@ -167,6 +171,11 @@ cpFunctionP
             -- Built-in functions go here
             "DIV" -> let (x:y:_) = params in CpIntDivide x y;
             "MOD" -> let (x:y:_) = params in CpModulus x y;
+            "LENGTH" -> let (string:_) = params in CpBuiltinLength string;
+            "LEFT" -> let (string:count:_) = params in CpBuiltinLeft string count;
+            "RIGHT" -> let (string:count:_) = params in CpBuiltinRight string count;
+            "MID" -> let (string:start:count:_) = params in CpBuiltinMid string start count;
+            "NUM_TO_STRING" -> let (expr:_) = params in CpBuiltinNumToString expr;
             -- Not built-in
             _ -> CpFunction f params;
         }
@@ -582,6 +591,31 @@ cpDefineProcedure =
     <*> strP "ENDPROCEDURE" <*> manySpaceP
     <*> lineBreak
 
+cpDefineFunction :: Parser CpFlow
+cpDefineFunction =
+    (\_ _ _ name _ maybeSignature _ _ _ returnType _ clause _ _ _ _ -> 
+        case maybeSignature of {
+            Nothing -> CpDefineFunction  name [] returnType clause;
+            _ -> case fromJust maybeSignature of {
+                Nothing -> CpDefineFunction name [] returnType clause;
+                _ -> CpDefineFunction
+                        name (fromJust $ fromJust maybeSignature) returnType clause
+            }
+    })
+    <$> manySpaceP
+    <*> strP "FUNCTION" <*> whiteSpaces
+    <*> cpVariableP <*> whiteSpaces
+    <*> optional (
+            charP '(' *> whiteSpaces
+        *> optional cpSignatureProcedure <* whiteSpaces
+        <* charP ')' <* whiteSpaces
+    ) <*> whiteSpaces
+    <*> strP "RETURNS" <*> whiteSpaces
+    <*> cpTypeP <*> (manySpaceP <* optional lineBreak)
+    <*> cpFlowP <*> manySpaceP
+    <*> strP "ENDFUNCTION" <*> manySpaceP
+    <*> lineBreak
+
 cpFlowP :: Parser CpFlow
 cpFlowP = CpFlow
     <$> many (
@@ -593,6 +627,7 @@ cpFlowP = CpFlow
         <|> cpForStepP
         <|> cpStructP
         <|> cpDefineProcedure
+        <|> cpDefineFunction
         <|> cpStatementsP
     )
 
@@ -825,6 +860,21 @@ instance DumpPython CpFlow where
                     dumpE param ++ ": " ++ dumpE paramType) <$> signature) ++
                 ") -> None:\n" ++
                 clauseOutput ++ afterEndprocedureOutput
+    
+    dump(   state@(State indentation),
+            CpFlow ((CpDefineFunction name signature returnType clause):tail)) =
+        (state, output)
+        where
+            (_, clauseOutput) =
+                dump (State (indentation+1), clause)
+            (_, afterEndprocedureOutput) = dump (state, CpFlow tail)
+
+            output =
+                indent indentation ++ "def " ++ dumpE name ++ "(" ++
+                intercalate ", " ((\(param, paramType) ->
+                    dumpE param ++ ": " ++ dumpE paramType) <$> signature) ++
+                ") -> " ++ dumpE returnType ++ ":\n" ++
+                clauseOutput ++ afterEndprocedureOutput
 
 instance DumpPythonStateless CpStatement where
     dumpE :: CpStatement -> String
@@ -935,6 +985,21 @@ instance DumpPythonStateless CpExpr where
         encloseBracket expr x (dumpE x) ++ " or " ++
         encloseBracket expr y (dumpE y)
 
+    dumpE expr@(CpBuiltinLength string) = "len(" ++ dumpE string ++ ")"
+
+    dumpE expr@(CpBuiltinLeft string count) =
+        dumpE string ++ "[0:" ++ dumpE count ++ "]"
+    
+    dumpE expr@(CpBuiltinRight string count) =
+        dumpE string ++ "[-" ++ dumpE count ++ ":-1]"
+
+    dumpE expr@(CpBuiltinMid string left count) =
+        dumpE string ++ "[" ++
+        dumpE left ++ "-1:" ++
+        dumpE left ++ "-1+" ++ dumpE count ++ "]"
+    
+    dumpE expr@(CpBuiltinNumToString number) = "str(" ++ dumpE number ++ ")"
+
 encloseBracket :: Ord a => a -> a -> String -> String
 encloseBracket outside inside dumpedInside =
     if outside >= inside
@@ -961,6 +1026,12 @@ initialState :: State
 initialState = State 0
 
 
+translate :: String -> Maybe String
+translate pseudocode = do
+    (_, program) <- run cpFlowP pseudocode
+    let (_, output) = dump (initialState, program)
+    return output
+
 -- Main function for testing only ----------------------------------------------
 main :: IO ()
 main = do
@@ -968,15 +1039,4 @@ main = do
         outputPath = inputPath ++ ".py"
 
     raw <- readFile inputPath
-    let programMaybe = run cpFlowP raw
-
-    if isJust programMaybe then do
-        let (rest, program) = fromJust programMaybe 
-        let output = snd $ dump (initialState, program)
-        print program
-        putStrLn rest
-        putStrLn output
-        writeFile outputPath output
-        putStrLn $ "Complete. File generated at \"" ++ outputPath ++ "\""
-    else do
-        putStrLn "Syntax error(s) exists."
+    print $ translate raw

@@ -53,7 +53,7 @@ sh run.sh <pseudocode_source_code>
 - [x] `DECLARE`
 - [x] `INPUT`
 - [x] `OUTPUT`
-- [ ] `RETURN`
+- [x] `RETURN`
 - [x] `CALL`
 
 ### Control Flow
@@ -73,8 +73,8 @@ sh run.sh <pseudocode_source_code>
 Due to the severe side effect caused by `BYREF`, `BYREF` will not be
 implemented. See [Data Type](#data-type) for default passing method.
 
-- [ ] `PROCEDURE ENDPROCEDURE`
-- [ ] `FUNCTION ENDFUNCTION`
+- [x] `PROCEDURE ENDPROCEDURE`
+- [x] `FUNCTION ENDFUNCTION`
 
 ### Pointer
 
