@@ -34,6 +34,7 @@ instance Ord CpExpr where
 
 instance HasPriority CpExpr where
     priority :: CpExpr -> Integer
+    priority (CpTakeAttribute{}) = 1
     priority (CpIndex{}) = 1
     priority (CpNot{}) = 2
     priority (CpNegative{}) = 2
@@ -88,6 +89,7 @@ data CpExpr
     | CpNotEqual CpExpr CpExpr      -- <>
     
     | CpIndex CpExpr [CpExpr]
+    | CpTakeAttribute CpExpr CpExpr
 
     -- Built-int functions
     | CpBuiltinLength CpExpr
@@ -221,19 +223,25 @@ cpPrimaryP
     <|> cpVariableP
     <|> cpInBracketP
 
-cpIndexP :: Parser CpExpr
-cpIndexP =
-    foldl (flip($))
-    <$> cpPrimaryP
-    <*> many (
-        (\_ _ _ firstIndex tailIndices _ _ ->
+cpTakeAttributeOrIndexP :: Parser CpExpr
+cpTakeAttributeOrIndexP =
+    foldl (flip($)) <$> cpPrimaryP <*> many (
+        -- take attribute
+        ((\_ _ _ expr -> flip CpTakeAttribute expr)
+            <$> manySpaceP
+            <*> strP "."
+            <*> manySpaceP
+            <*> cpPrimaryP)
+        <|>
+        -- index
+        ((\_ _ _ firstIndex tailIndices _ _ ->
             flip CpIndex (firstIndex:tailIndices))
         <$> manySpaceP
         <*> charP '[' <*> manySpaceP
         <*> cpExprP
         <*> many (manySpaceP *> charP ',' *> manySpaceP *> cpExprP)
         <*> manySpaceP
-        <*> charP ']'
+        <*> charP ']')
     )
 
 cpUnaryP :: Parser CpExpr
@@ -246,7 +254,7 @@ cpUnaryP =
         )
     )
     <$> many ((strP "NOT" <|> strP "-") <* manySpaceP)
-    <*> cpIndexP
+    <*> cpTakeAttributeOrIndexP
 
 cpPowerP :: Parser CpExpr
 cpPowerP =
@@ -312,7 +320,7 @@ cpCompareP =
         <*> (
                 strP "<="
             <|> strP ">="
-            <|> strP "< "
+            <|> strP "< " -- So is here
             <|> strP ">"
         )
         <*> manySpaceP
@@ -328,10 +336,7 @@ cpEqualityP =
             _ -> undefined;
         })
         <$> manySpaceP
-        <*> (
-                strP "="
-            <|> strP "<>"
-        )
+        <*> (strP "=" <|> strP "<>")
         <*> manySpaceP
         <*> cpCompareP
     )
@@ -979,6 +984,10 @@ instance DumpPythonStateless CpExpr where
     dumpE (CpFunction functionName exprs) = output where
         params = intercalate ", " $ dumpE <$> exprs
         output = functionName ++ "(" ++ params ++ ")"
+
+    dumpE expr@(CpTakeAttribute x y) =
+        encloseBracket expr x (dumpE x) ++ "." ++
+        encloseBracket expr y (dumpE y)
 
     dumpE expr@(CpIndex x indices) =
         dumpE x ++
