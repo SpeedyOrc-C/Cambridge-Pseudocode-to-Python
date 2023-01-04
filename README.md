@@ -95,10 +95,11 @@ Too many side effect! No pointers allowed!
 
 ### File
 
-- [ ] `OPEN FOR`
-- [ ] `READFILE`
-- [ ] `WRITEFILE`
+- [x] `OPEN FOR`
+- [x] `OPENFILE FOR`
+- [x] `READFILE`
+- [x] `WRITEFILE`
 - [ ] `EOF`
-- [ ] `CLOSEFILE`
+- [x] `CLOSEFILE`
 
 ### Built-in Functions

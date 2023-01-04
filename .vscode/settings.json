@@ -1,11 +1,14 @@
 {
     "cSpell.words": [
         "BYREF",
+        "campseudo",
         "CLOSEFILE",
         "ENDCASE",
         "ENDFOR",
         "ENDFUNCTION",
         "ENDPROCEDURE",
+        "ENDTYPE",
+        "OPENFILE",
         "READFILE",
         "STRUCT",
         "WRITEFILE"
