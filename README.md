@@ -13,13 +13,21 @@ computer science textbook.
 ### Compile
 
 1. Install [Glasgow Haskell Compiler](https://www.haskell.org/ghc/).
-2. Run `compile.sh`.
+2. Run `compile.sh` on UNIX or `compile.cmd` on Windows.
 3. An executable `campseudo-to-py` will be generated.
 
 ### Translate Pseudocode
 
+#### UNIX
+
 ```sh
-./campseudo-to-py <pseudocode_source_code>
+./campseudo-to-py file_path
+```
+
+#### Windows
+
+```cmd
+.\campseudo-to-py.exe file_path
 ```
 
 e.g. If the source file is `hello.whatever`,
@@ -27,12 +35,17 @@ then `hello.whatever.py` will be generated.
 
 ### Run Pseudocode
 
-1. Install [Python](https://www.python.org/downloads/).
-2. Run the following command:
+#### UNIX
+
 ```sh
-sh run.sh <pseudocode_source_code>
+sh run.sh file_path
 ```
-3. It generates the Python script, and it is executed afterwards.
+
+#### Windows
+
+```cmd
+.\run.cmd file_path
+```
 
 ## Language Feature Supported
 
