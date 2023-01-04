@@ -5,6 +5,7 @@ import MyParser
 import Control.Applicative (optional, many, some, (<|>), Alternative (empty))
 import Data.List (intercalate, intersperse)
 import Data.Maybe (fromJust, isJust)
+import Data.Char (toLower)
 
 
 alphaUpper :: String
@@ -17,6 +18,7 @@ numeric :: String
 numeric = "0123456789"
 numericNo0 :: String
 numericNo0 = "123456789"
+identifier = alpha ++ numeric ++ "_"
 
 -- Priorities of operations ----------------------------------------------------
 class HasPriority a where
@@ -104,7 +106,13 @@ data CpType
     | CpTypeArray [(CpExpr, CpExpr)] CpType
     | CpTypeCustom CpExpr
     deriving Show
-    
+
+data FileMode
+    = FileRead
+    | FileWrite
+    | FileAppend
+    deriving Show
+
 data CpStatement
     = CpAssign CpExpr CpExpr
     | CpDeclare CpExpr CpType
@@ -113,6 +121,10 @@ data CpStatement
     | CpEnumerated CpExpr [CpExpr]
     | CpFunctionCall CpExpr
     | CpReturn CpExpr
+    | CpOpen CpExpr FileMode
+    | CpWrite CpExpr CpExpr
+    | CpRead CpExpr CpExpr
+    | CpClose CpExpr
     | CpBlankLine
     deriving Show
 
@@ -442,6 +454,42 @@ cpEnumeratedP =
     <*> optional (charP ',' <* whiteSpaces)
     <*> charP ')'
 
+cpFileModeP :: Parser FileMode
+cpFileModeP =
+        FileRead <$ strP "READ"
+    <|> FileWrite <$ strP "WRITE"
+    <|> FileAppend <$ strP "APPEND"
+
+cpOpenP :: Parser CpStatement
+cpOpenP = 
+    (\_ _ path _ _ _ mode -> CpOpen path mode)
+    <$> (strP "OPENFILE" <|> strP "OPEN") <*> manySpaceP
+    <*> cpExprP <*> manySpaceP
+    <*> strP "FOR" <*> manySpaceP
+    <*> cpFileModeP
+
+cpWriteP :: Parser CpStatement
+cpWriteP =
+    (\_ _ path _ _ _ content -> CpWrite path content)
+    <$> strP "WRITEFILE" <*> manySpaceP
+    <*> cpExprP <*> manySpaceP
+    <*> charP ',' <*> manySpaceP
+    <*> cpExprP
+
+cpReadP :: Parser CpStatement
+cpReadP =
+    (\_ _ path _ _ _ variable -> CpRead path variable)
+    <$> strP "READFILE" <*> manySpaceP
+    <*> cpExprP <*> manySpaceP
+    <*> charP ',' <*> manySpaceP
+    <*> cpExprP
+
+cpCloseP :: Parser CpStatement
+cpCloseP =
+    (\_ _ path -> CpClose path)
+    <$> strP "CLOSEFILE" <*> manySpaceP
+    <*> cpExprP
+
 cpStatementP :: Parser CpStatement
 cpStatementP =
     manySpaceP *> (
@@ -452,6 +500,10 @@ cpStatementP =
         <|> cpReturnP
         <|> cpDeclareP
         <|> cpEnumeratedP
+        <|> cpOpenP
+        <|> cpWriteP
+        <|> cpReadP
+        <|> cpCloseP
         <|> cpBlankLineP
     )
     <* manySpaceP
@@ -876,6 +928,11 @@ instance DumpPython CpFlow where
                 ") -> " ++ dumpE returnType ++ ":\n" ++
                 clauseOutput ++ afterEndprocedureOutput
 
+fileNameToVariableIdentifier :: String -> String
+fileNameToVariableIdentifier fileName =
+    "file_" ++
+    ((\c -> if c `notElem` identifier then '_' else c) <$> fileName)
+
 instance DumpPythonStateless CpStatement where
     dumpE :: CpStatement -> String
     dumpE (CpOutput exprs) =
@@ -886,6 +943,27 @@ instance DumpPythonStateless CpStatement where
     dumpE (CpFunctionCall expr) = dumpE expr
     dumpE (CpDeclare variable variableType) =
         dumpE variable ++ ": " ++ dumpE variableType
+
+    dumpE (CpOpen (CpString fileName) mode) =
+        fileNameToVariableIdentifier fileName ++
+        " = open(\"" ++ fileName ++ "\", \"" ++ pyMode ++ "\")"
+        where
+            pyMode = case mode of {
+                FileRead -> "r";
+                FileWrite -> "w";
+                FileAppend -> "a";
+            }
+
+    dumpE (CpClose (CpString fileName)) =
+        fileNameToVariableIdentifier fileName ++ ".close()"
+
+    dumpE (CpRead (CpString fileName) variable) =
+        dumpE variable ++ " = " ++
+        fileNameToVariableIdentifier fileName ++ ".readline()"
+    
+    dumpE (CpWrite (CpString fileName) expr) =
+        fileNameToVariableIdentifier fileName ++ ".write(" ++ dumpE expr ++ ")"
+
     dumpE CpBlankLine = ""
 
 
