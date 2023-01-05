@@ -1,12 +1,6 @@
-campseudo-to-py
-campseudo-to-py.exe
+bin/*
+src/*.hi
+src/*.o
+test.campseudo*
 
-CambridgePseudocodeToPython.hi
-CambridgePseudocodeToPython.o
-Main.hi
-Main.o
-MyParser.hi
-MyParser.o
-
-test.campseudo
-test.campseudo.py
+.DS_Store

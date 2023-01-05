@@ -6,7 +6,7 @@ This is a translator written in Haskell that translate a pseudocode source file
 into a Python script. 
 
 The adopted pseudocode language is from GCSE and Advanced Level's
-computer science textbook.
+computer science textbook and 9618 syllabus.
 
 ## How to Use?
 
@@ -38,7 +38,7 @@ then `hello.whatever.py` will be generated.
 #### UNIX
 
 ```sh
-sh run.sh file_path
+./run.sh file_path
 ```
 
 #### Windows
@@ -73,12 +73,10 @@ sh run.sh file_path
 
 - [x] `IF THEN ENDIF`
 - [x] `IF THEN ELSE ENDIF`
-- [x] `WHILE DO ENDWHILE`
+- [x] `WHILE DO ENDWHILE` / `WHILE ENDWHILE`
 - [x] `REPEAT UNTIL`
-- [x] `FOR TO NEXT`
-- [x] `FOR TO ENDFOR`
-- [x] `FOR TO STEP NEXT`
-- [x] `FOR TO STEP ENDFOR`
+- [x] `FOR TO NEXT` / `FOR TO ENDFOR`
+- [x] `FOR TO STEP NEXT` / `FOR TO STEP ENDFOR`
 - [ ] `CASE OF OTHERWISE ENDCASE`
 
 ### Subroutine
@@ -95,11 +93,23 @@ Too many side effect! No pointers allowed!
 
 ### File
 
-- [x] `OPEN FOR`
-- [x] `OPENFILE FOR`
+- [x] `OPEN FOR` / `OPENFILE FOR`
 - [x] `READFILE`
 - [x] `WRITEFILE`
-- [ ] `EOF`
+- [x] `EOF`
 - [x] `CLOSEFILE`
 
 ### Built-in Functions
+
+- `CHR`
+- `ASC`
+- `LCASE`
+- `UCASE`
+- `TO_UPPER`
+- `TO_LOWER`
+- `LENGTH`
+- `LEFT`
+- `RIGHT`
+- `MID`
+- `NUM_TO_STRING`
+- `RAND`

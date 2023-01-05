@@ -1,1 +1,3 @@
-ghc Main.hs -o campseudo-to-py
+cd src
+ghc Main.hs -o ..\bin\campseudo-to-py
+cd ..\
