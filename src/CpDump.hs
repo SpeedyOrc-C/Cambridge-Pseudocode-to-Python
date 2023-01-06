@@ -308,7 +308,8 @@ instance DumpPythonStateless CpExpr where
 
     dumpE expr@(CpIndex x indices) =
         dumpE x ++
-        concatMap (\index -> "[" ++ dumpE index ++ "]") indices
+        -- Pseudocode's indices are 1-based, Python's are 0-based
+        concatMap (\index -> "[" ++ dumpE index ++ "-1]") indices
 
     dumpE expr@(CpNot x) = "not " ++ encloseBracket expr x (dumpE x)
     dumpE (CpNegative x) = "-" ++ dumpE x
