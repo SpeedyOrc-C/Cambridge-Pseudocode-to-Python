@@ -1,6 +1,7 @@
 bin/*
 src/*.hi
 src/*.o
+example/*.py
 test.campseudo*
 
 .DS_Store

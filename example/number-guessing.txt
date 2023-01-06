@@ -1,0 +1,22 @@
+OUTPUT "Guess a number between 1 to 100"
+answer <- INT(RAND() * 100 + 1)
+guess_count <- 0
+
+REPEAT
+    OUTPUT "Make a guess:"
+    INPUT guess
+    guess <- INT(guess)
+
+    IF guess = answer THEN
+        OUTPUT "Correct!"
+        OUTPUT "You've guessed", guess_count, "times."
+    ELSE
+        IF guess < answer THEN
+            OUTPUT "Too small"
+        ELSE
+            OUTPUT "Too large"
+        ENDIF
+        guess_count <- guess_count + 1
+    ENDIF
+    
+UNTIL guess = answer
