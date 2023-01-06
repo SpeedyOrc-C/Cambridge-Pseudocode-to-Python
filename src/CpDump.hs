@@ -389,6 +389,8 @@ instance DumpPythonStateless CpExpr where
         encloseBracket expr x (dumpE x) ++ " or " ++
         encloseBracket expr y (dumpE y)
 
+    dumpE expr@(CpBuiltinInt expr1) = "int(" ++ dumpE expr1 ++ ")"
+
     dumpE expr@(CpBuiltinChr order) = "chr(" ++ dumpE order ++ ")"
 
     dumpE expr@(CpBuiltinAsc char) = "ord(" ++ dumpE char ++ ")"

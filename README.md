@@ -101,6 +101,7 @@ Too many side effect! No pointers allowed!
 
 ### Built-in Functions
 
+- `INT`
 - `CHR`
 - `ASC`
 - `LCASE`

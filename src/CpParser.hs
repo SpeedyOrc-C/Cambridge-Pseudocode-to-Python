@@ -60,6 +60,7 @@ cpFunctionP
             "DIV" -> let (x:y:_) = params in CpIntDivide x y;
             "MOD" -> let (x:y:_) = params in CpModulus x y;
             -- Built-in functions
+            "INT" -> let (expr:_) = params in CpBuiltinInt expr;
             "CHR" -> let (order:_) = params in CpBuiltinChr order;
             "ASC" -> let (char:_) = params in CpBuiltinAsc char;
             "LCASE" -> let (string:_) = params in CpBuiltinLcase string;

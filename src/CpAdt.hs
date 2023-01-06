@@ -50,6 +50,7 @@ data CpExpr
     | CpTakeAttribute CpExpr CpExpr
 
     -- Built-in functions
+    | CpBuiltinInt CpExpr
     | CpBuiltinChr CpExpr
     | CpBuiltinAsc CpExpr
     | CpBuiltinLcase CpExpr
@@ -223,6 +224,8 @@ instance GetSpecialFunctions CpExpr where
         getSpecial expr1 ++ getSpecial expr2
     getSpecial (CpNotEqual expr1 expr2) = nub $
         getSpecial expr1 ++ getSpecial expr2
+
+    getSpecial (CpBuiltinInt expr1) = getSpecial expr1
 
     getSpecial _ = []
 
