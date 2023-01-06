@@ -463,7 +463,7 @@ cpForP =
     <*> strP "FOR" <*> manySpaceP
     <*> cpAssignP <*> manySpaceP
     <*> strP "TO" <*> manySpaceP
-    <*> cpIntP <*> (manySpaceP <* optional lineBreak)
+    <*> cpExprP <*> (manySpaceP <* optional lineBreak)
     <*> cpFlowP <*> manySpaceP
     <*> (strP "NEXT" <|> strP "ENDFOR") <*> manySpaceP
     <*> lineBreak
@@ -476,9 +476,9 @@ cpForStepP =
     <*> strP "FOR" <*> manySpaceP
     <*> cpAssignP <*> manySpaceP
     <*> strP "TO" <*> manySpaceP
-    <*> cpIntP <*> manySpaceP
+    <*> cpExprP <*> manySpaceP
     <*> strP "STEP" <*> manySpaceP
-    <*> cpIntP <*> (manySpaceP <* optional lineBreak)
+    <*> cpExprP <*> (manySpaceP <* optional lineBreak)
     <*> cpFlowP <*> manySpaceP
     <*> (strP "NEXT" <|> strP "ENDFOR") <*> manySpaceP
     <*> lineBreak
