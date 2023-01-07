@@ -1,0 +1,35 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net6.0-windows</TargetFramework>
+    <RootNamespace>Cambridge_Pseudocode_to_Python</RootNamespace>
+    <Nullable>enable</Nullable>
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Remove="Resources.en.resx" />
+    <EmbeddedResource Remove="Resources.zh-Hans.resx" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Resources.en.resx" />
+    <Resource Include="Resources.zh-Hans.resx" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Update="Resources.en.Designer.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Resources.en.resx</DependentUpon>
+    </Compile>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="campseudo-to-py.exe">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

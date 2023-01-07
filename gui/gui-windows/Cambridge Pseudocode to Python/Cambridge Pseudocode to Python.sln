@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.4.33122.133
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Cambridge Pseudocode to Python", "Cambridge Pseudocode to Python.csproj", "{FA9F1BD7-53CD-46C2-898A-BF2EEEFF81DF}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{FA9F1BD7-53CD-46C2-898A-BF2EEEFF81DF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FA9F1BD7-53CD-46C2-898A-BF2EEEFF81DF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FA9F1BD7-53CD-46C2-898A-BF2EEEFF81DF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FA9F1BD7-53CD-46C2-898A-BF2EEEFF81DF}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {80FEA638-DFAB-441F-BB5F-05B5D24B6DD4}
+	EndGlobalSection
+EndGlobal
