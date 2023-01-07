@@ -2,10 +2,10 @@ module CpDump where
 
 
 import CpAdt
-
-import Data.List (intercalate, intersperse)
 import CpParser (identifier)
 import MyParser (Parser(run))
+
+import Data.List (intercalate, intersperse)
 
 class DumpPython program where
     dump :: (State, program) -> (State, String)

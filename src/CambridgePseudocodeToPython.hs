@@ -2,14 +2,15 @@ module CambridgePseudocodeToPython (translate) where
 
 import MyParser (Parser(run))
 import CpAdt ( getSpecial, getImplementation )
-import CpParser (cpFlowP)
+import CpParser (cpProgramP)
 import CpDump (dump, initialState)
+
 import Data.List (intercalate)
 
 
 translate :: String -> Maybe String
 translate pseudocode = do
-    (_, program) <- run cpFlowP pseudocode
+    (_, program) <- run cpProgramP pseudocode
 
     let implementationOutput =
             intercalate "\n" $ getImplementation <$> getSpecial program

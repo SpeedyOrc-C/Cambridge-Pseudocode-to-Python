@@ -2,7 +2,7 @@
 
 module CpParser (
     identifier,
-    cpFlowP,
+    cpProgramP,
 ) where
 
 import CpAdt
@@ -572,3 +572,9 @@ cpFlowP = CpFlow
         <|> cpDefineFunction
         <|> cpStatementsP
     )
+
+cpProgramP :: Parser CpFlow
+cpProgramP = Parser $ \input ->
+    if null input
+        then Nothing
+        else run cpFlowP input
