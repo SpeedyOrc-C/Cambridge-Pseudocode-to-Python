@@ -1,0 +1,20 @@
+/* 
+  Localizable.strings
+  Cambridge Pseudocode to Python
+
+  Created by 陈湛明 on 2023/1/7.
+  
+*/
+
+"program-title" = "Cambridge Pseudocode to Python";
+"choose-pseudocode-file" = "Choose pseudocode file";
+"translate" = "Translate";
+
+"no-chosen-file" = "No Chosen File";
+"translate-after-choose" = "Please choose the pseudocode file before translate it.";
+
+"syntax-error" = "Syntax Error";
+"contain-syntax-error" = "Pseudocode contains syntax error, or there is no leading line break.";
+
+"save" = "Save";
+"save-as-python" = "Save translated Python file";

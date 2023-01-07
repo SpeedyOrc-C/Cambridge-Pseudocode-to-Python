@@ -1,0 +1,20 @@
+/* 
+  Localizable.strings
+  Cambridge Pseudocode to Python
+
+  Created by 陈湛明 on 2023/1/7.
+  
+*/
+
+"program-title" = "剑桥伪代码转Python";
+"choose-pseudocode-file" = "选择伪代码文件";
+"translate" = "翻译";
+
+"no-chosen-file" = "没有选择文件";
+"translate-after-choose" = "请先选择伪代码文件之后再翻译";
+
+"syntax-error" = "语法错误";
+"contain-syntax-error" = "伪代码包含语法错误，或是文件末尾没有换行。";
+
+"save" = "保存";
+"save-as-python" = "保存翻译好的Python代码";
