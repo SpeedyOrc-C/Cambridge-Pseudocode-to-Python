@@ -54,7 +54,7 @@ cpVariableP =
 
 cpFunctionP :: Parser CpExpr
 cpFunctionP
-    = (\(CpVariable f) _ _ _ params _ _ ->
+    = (\(CpVariable f) params ->
         case f of {
             -- Infix operators
             "DIV" -> let (x:y:_) = params in CpIntDivide x y;
@@ -79,10 +79,10 @@ cpFunctionP
             _ -> CpFunction f params;
         }
     )
-    <$> cpVariableP <*> manySpaceP
-    <*> charP '(' <*> manySpaceP
-    <*> parametersP <*> manySpaceP
-    <*> charP ')'
+    <$> (cpVariableP <* manySpaceP
+    <* charP '(' <* manySpaceP)
+    <*> (parametersP <* manySpaceP
+    <* charP ')')
 
 parametersP :: Parser [CpExpr]
 parametersP =
@@ -112,21 +112,21 @@ cpTakeAttributeOrIndexP :: Parser CpExpr
 cpTakeAttributeOrIndexP =
     foldl (flip($)) <$> cpPrimaryP <*> many (
         -- take attribute
-        ((\_ _ _ expr -> flip CpTakeAttribute expr)
-            <$> manySpaceP
-            <*> strP "."
-            <*> manySpaceP
-            <*> cpPrimaryP)
+        (flip CpTakeAttribute
+            <$> (manySpaceP
+            *>  strP "."
+            *>  manySpaceP
+            *>  cpPrimaryP))
         <|>
         -- index
-        ((\_ _ _ firstIndex tailIndices _ _ ->
+        ((\firstIndex tailIndices ->
             flip CpIndex (firstIndex:tailIndices))
-        <$> manySpaceP
-        <*> charP '[' <*> manySpaceP
-        <*> cpExprP
+        <$> (manySpaceP
+        *> charP '[' *> manySpaceP
+        *> cpExprP)
         <*> many (manySpaceP *> charP ',' *> manySpaceP *> cpExprP)
-        <*> manySpaceP
-        <*> charP ']')
+        <* manySpaceP
+        <* charP ']')
     )
 
 cpUnaryP :: Parser CpExpr
@@ -144,56 +144,56 @@ cpUnaryP =
 cpPowerP :: Parser CpExpr
 cpPowerP =
     foldl (flip($)) <$> cpUnaryP <*> many (
-        (\_ op _ expr -> flip CpPower expr)
-        <$> manySpaceP
-        <*> strP "^" <*> manySpaceP
-        <*> cpUnaryP
+        flip CpPower
+        <$> (manySpaceP
+        *> strP "^" *> manySpaceP
+        *> cpUnaryP)
     )
 
 cpFactorP :: Parser CpExpr
 cpFactorP =
     foldl (flip($)) <$> cpPowerP <*> many (
-        (\_ op _ expr -> case op of {
+        (\op expr -> case op of {
             "*" -> flip CpMultiply expr;
             "/" -> flip CpDivide expr;
             "MOD" -> flip CpModulus expr;
             "DIV" -> flip CpIntDivide expr;
             _ -> undefined;
         })
-        <$> manySpaceP
-        <*> (
+        <$> (manySpaceP
+        *> (
                 strP "*"
             <|> strP "/"
             <|> strP "MOD"
             <|> strP "DIV"
-        )
-        <*> manySpaceP
-        <*> cpPowerP
+        ))
+        <*> (manySpaceP
+        *> cpPowerP)
     )
 
 cpTermP :: Parser CpExpr
 cpTermP = 
     foldl (flip($)) <$> cpFactorP <*> many (
-        (\_ op _ expr -> case op of {
+        (\op expr -> case op of {
             "+" -> flip CpAdd expr;
             "&" -> flip CpAdd expr;
             "-" -> flip CpSubtract expr;
             _ -> undefined;
         })
-        <$> manySpaceP
-        <*> (
+        <$> (manySpaceP
+        *> (
                 strP "+"
             <|> strP "-"
             <|> strP "&"
-        )
-        <*> manySpaceP
-        <*> cpFactorP
+        ))
+        <*> (manySpaceP
+        *> cpFactorP)
     )
 
 cpCompareP :: Parser CpExpr
 cpCompareP = 
     foldl (flip($)) <$> cpTermP <*> many (
-        (\_ op _ expr -> case op of {
+        (\op expr -> case op of {
             -- "< " must have a space or the translator will recognise it as "<-"
             "< " -> flip CpLess expr;
             ">" -> flip CpGreater expr;
@@ -201,45 +201,45 @@ cpCompareP =
             ">=" -> flip CpGreaterEqual expr;
             _ -> undefined;
         })
-        <$> manySpaceP
-        <*> (
+        <$> (manySpaceP
+        *> (
                 strP "<="
             <|> strP ">="
             <|> strP "< " -- So is here
             <|> strP ">"
-        )
-        <*> manySpaceP
-        <*> cpTermP
+        ))
+        <*> (manySpaceP
+        *> cpTermP)
     )
 
 cpEqualityP :: Parser CpExpr
 cpEqualityP =
     foldl (flip($)) <$> cpCompareP <*> many (
-        (\_ op _ expr -> case op of {
+        (\op expr -> case op of {
             "=" -> flip CpEqual expr;
             "<>" -> flip CpNotEqual expr;
             _ -> undefined;
         })
-        <$> manySpaceP
-        <*> (strP "=" <|> strP "<>")
-        <*> manySpaceP
-        <*> cpCompareP
+        <$> (manySpaceP
+        *> (strP "=" <|> strP "<>"))
+        <*> (manySpaceP
+        *> cpCompareP)
     )
 
 cpAndP :: Parser CpExpr
 cpAndP = foldl (flip($)) <$> cpEqualityP <*> many (
-        (\_ op _ expr -> flip CpAnd expr)
-        <$> manySpaceP
-        <*> strP "AND" <*> manySpaceP
-        <*> cpEqualityP
+        flip CpAnd
+        <$> (manySpaceP
+        *> strP "AND" *> manySpaceP
+        *> cpEqualityP)
     )
 
 cpOrP :: Parser CpExpr
 cpOrP = foldl (flip($)) <$> cpAndP <*> many (
-        (\_ op _ expr -> flip CpOr expr)
-        <$> manySpaceP
-        <*> strP "OR"
-        <*> manySpaceP <*> cpAndP
+        flip CpOr
+        <$> (manySpaceP
+        *> strP "OR"
+        *> manySpaceP *> cpAndP)
     )
 
 cpExprP :: Parser CpExpr
@@ -247,23 +247,23 @@ cpExprP = cpOrP
 
 cpTypeArrayP :: Parser CpType
 cpTypeArrayP =
-    (\_ _ _ _ headDimension tailDimensions _ _ _ _ _ elementType ->
+    (\headDimension tailDimensions elementType ->
         CpTypeArray (headDimension : tailDimensions) elementType)
-    <$> strP "ARRAY" <*> manySpaceP
-    <*> charP '[' <*> manySpaceP
-    <*> arrayDimensionP
+    <$> (strP "ARRAY" *> manySpaceP
+    *> charP '[' *> manySpaceP
+    *> arrayDimensionP)
     <*> many (manySpaceP *> charP ',' *> manySpaceP *> arrayDimensionP)
-    <*> manySpaceP
-    <*> charP ']' <*> manySpaceP
-    <*> strP "OF" <*> manySpaceP
-    <*> cpTypeP
+    <*> (manySpaceP
+    *> charP ']' *> manySpaceP
+    *> strP "OF" *> manySpaceP
+    *> cpTypeP)
 
 arrayDimensionP :: Parser (CpExpr, CpExpr)
 arrayDimensionP = 
-    (\from _ _ _ to -> (from, to))
-    <$> cpExprP <*> manySpaceP
-    <*> (charP ':' <|> charP ',') <*> manySpaceP
-    <*> cpExprP
+    (,)
+    <$> cpExprP <*> (manySpaceP
+    *> (charP ':' <|> charP ',') *> manySpaceP
+    *> cpExprP)
 
 cpTypeP :: Parser CpType
 cpTypeP =
@@ -279,106 +279,102 @@ cpTypeP =
 -- Statement parser ------------------------------------------------------------
 cpAssignP :: Parser CpStatement
 cpAssignP =
-    (\var _ _ _ expr -> CpAssign var expr)
-    <$> cpExprP <*> manySpaceP
-    <*> strP "<-" <*> manySpaceP
-    <*> cpExprP
+    CpAssign
+    <$> cpExprP <*> (manySpaceP
+    *> strP "<-" *> manySpaceP
+    *> cpExprP)
 
 cpOutputP :: Parser CpStatement
 cpOutputP =
-    (\_ _ params -> CpOutput params)
-    <$> strP "OUTPUT" <*> manySpaceP
-    <*> parametersP
+    CpOutput
+    <$> (strP "OUTPUT" *> manySpaceP
+    *> parametersP)
 
 cpInputP :: Parser CpStatement
 cpInputP =
-    (\_ _ variable -> CpInput variable)
-    <$> strP "INPUT" <*> manySpaceP
-    <*> cpExprP
+    CpInput
+    <$> (strP "INPUT" *> manySpaceP
+    *> cpExprP)
 
 cpReturnP :: Parser CpStatement
 cpReturnP =
-    (\_ _ expr -> CpReturn expr)
-    <$> strP "RETURN" <*> manySpaceP
-    <*> cpExprP
+    CpReturn
+    <$> (strP "RETURN" *> manySpaceP
+    *> cpExprP)
 
 cpFunctionCallP :: Parser CpStatement
 cpFunctionCallP =
-    (\_ _ f -> case f of {
-        CpFunction _ _ -> CpFunctionCall f;
-        (CpVariable v) -> CpFunctionCall (CpFunction v []);
+    (\f -> case f of {
+        CpFunction {} -> CpFunctionCall f;
+        CpVariable v -> CpFunctionCall (CpFunction v []);
     })
-    <$> strP "CALL" <*> manySpaceP
-    <*> (
-            cpFunctionP
-        <|> cpVariableP
-    )
+    <$> (strP "CALL" *> manySpaceP
+    *> (cpFunctionP <|> cpVariableP))
 
 cpBlankLineP :: Parser CpStatement
 cpBlankLineP = CpBlankLine <$ manySpaceP
 
 cpDeclareP :: Parser CpStatement
 cpDeclareP = 
-    (\_ _ variable _ _ _ variableType ->
-        CpDeclare variable variableType)
-    <$> strP "DECLARE" <*> manySpaceP
-    <*> cpVariableP <*> manySpaceP
-    <*> charP ':' <*> manySpaceP
-    <*> cpTypeP
+    CpDeclare
+    <$> (strP "DECLARE" *> manySpaceP
+    *> cpVariableP <* manySpaceP)
+    <*> (charP ':' *> manySpaceP
+    *> cpTypeP)
 
 cpEnumeratedP :: Parser CpStatement
 cpEnumeratedP =
-    (\_ _ variable _ _ _ _ _ firstConstant _ tailConstants _ _ ->
+    (\variable firstConstant tailConstants ->
         CpEnumerated variable (firstConstant : tailConstants))
-    <$> strP "TYPE" <*> manySpaceP
-    <*> cpVariableP <*> manySpaceP
-    <*> charP '=' <*> manySpaceP
+    <$> (strP "TYPE" *> manySpaceP
+    *> cpVariableP <* manySpaceP)
+    <*> (charP '=' *> manySpaceP
     -- If there are too many constants, line breaks are allowed.
-    <*> charP '(' <*> whiteSpaces
-    <*> cpVariableP <*> whiteSpaces
+    *> charP '(' *> whiteSpaces
+    *> cpVariableP <* whiteSpaces)
     <*> many (
             charP ',' *> whiteSpaces
         *>  cpVariableP <* whiteSpaces
     )
     -- Allow a redundant comma after the last constant.
-    <*> optional (charP ',' <* whiteSpaces)
-    <*> charP ')'
+    <* optional (charP ',' <* whiteSpaces)
+    <* charP ')'
 
 cpFileModeP :: Parser FileMode
 cpFileModeP =
-        FileRead <$ strP "READ"
-    <|> FileWrite <$ strP "WRITE"
-    <|> FileAppend <$ strP "APPEND"
+        FileRead    <$ strP "READ"
+    <|> FileWrite   <$ strP "WRITE"
+    <|> FileAppend  <$ strP "APPEND"
 
 cpOpenP :: Parser CpStatement
 cpOpenP = 
-    (\_ _ path _ _ _ mode -> CpOpen path mode)
-    <$> (strP "OPENFILE" <|> strP "OPEN") <*> manySpaceP
-    <*> cpExprP <*> manySpaceP
-    <*> strP "FOR" <*> manySpaceP
-    <*> cpFileModeP
+    CpOpen
+    <$> ((strP "OPENFILE" <|> strP "OPEN") *> manySpaceP
+    *> cpExprP <* manySpaceP)
+    <*> (strP "FOR" *> manySpaceP
+    *> cpFileModeP)
 
 cpWriteP :: Parser CpStatement
 cpWriteP =
-    (\_ _ path _ _ _ content -> CpWrite path content)
-    <$> strP "WRITEFILE" <*> manySpaceP
-    <*> cpExprP <*> manySpaceP
-    <*> charP ',' <*> manySpaceP
-    <*> cpExprP
+    CpWrite
+    <$> (strP "WRITEFILE" *> manySpaceP
+    *> cpExprP <* manySpaceP)
+    <*> (charP ',' *> manySpaceP
+    *> cpExprP)
 
 cpReadP :: Parser CpStatement
 cpReadP =
-    (\_ _ path _ _ _ variable -> CpRead path variable)
-    <$> strP "READFILE" <*> manySpaceP
-    <*> cpExprP <*> manySpaceP
-    <*> charP ',' <*> manySpaceP
-    <*> cpExprP
+    CpRead
+    <$> (strP "READFILE" *> manySpaceP
+    *> cpExprP <* manySpaceP)
+    <*> (charP ',' *> manySpaceP
+    *> cpExprP)
 
 cpCloseP :: Parser CpStatement
 cpCloseP =
-    (\_ _ path -> CpClose path)
-    <$> strP "CLOSEFILE" <*> manySpaceP
-    <*> cpExprP
+    CpClose
+    <$> (strP "CLOSEFILE" *> manySpaceP
+    *> cpExprP)
 
 cpStatementP :: Parser CpStatement
 cpStatementP =
