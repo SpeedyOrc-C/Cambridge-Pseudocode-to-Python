@@ -54,31 +54,29 @@ cpVariableP =
 
 cpFunctionP :: Parser CpExpr
 cpFunctionP
-    = (\(CpVariable f) params ->
-        case f of {
-            -- Infix operators
-            "DIV" -> let (x:y:_) = params in CpIntDivide x y;
-            "MOD" -> let (x:y:_) = params in CpModulus x y;
-            -- Built-in functions
-            "INT" -> let (expr:_) = params in CpBuiltinInt expr;
-            "CHR" -> let (order:_) = params in CpBuiltinChr order;
-            "ASC" -> let (char:_) = params in CpBuiltinAsc char;
-            "LCASE" -> let (string:_) = params in CpBuiltinLcase string;
-            "UCASE" -> let (string:_) = params in CpBuiltinUcase string;
-            "TO_UPPER" -> let (string:_) = params in CpBuiltinToUpper string;
-            "TO_LOWER" -> let (string:_) = params in CpBuiltinToLower string;
-            "LENGTH" -> let (string:_) = params in CpBuiltinLength string;
-            "LEFT" -> let (string:count:_) = params in CpBuiltinLeft string count;
-            "RIGHT" -> let (string:count:_) = params in CpBuiltinRight string count;
-            "MID" -> let (string:start:count:_) = params in CpBuiltinMid string start count;
-            "NUM_TO_STRING" -> let (expr:_) = params in CpBuiltinNumToString expr;
-            -- Special built-in functions
-            "EOF" -> let (path:_) = params in CpBuiltinEof path;
-            "RAND" -> CpBuiltinRand;
-            -- Not built-in
-            _ -> CpFunction f params;
-        }
-    )
+    = (\(CpVariable f) params -> case f of {
+    -- Infix operators
+        "DIV"   -> let (x:y:_) = params in CpIntDivide x y;
+        "MOD"   -> let (x:y:_) = params in CpModulus x y;
+        -- Built-in functions
+        "INT" -> let (expr:_)               = params in CpBuiltinInt expr;
+        "CHR" -> let (order:_)              = params in CpBuiltinChr order;
+        "ASC" -> let (char:_)               = params in CpBuiltinAsc char;
+        "LCASE" -> let (string:_)           = params in CpBuiltinLcase string;
+        "UCASE" -> let (string:_)           = params in CpBuiltinUcase string;
+        "TO_UPPER" -> let (string:_)        = params in CpBuiltinToUpper string;
+        "TO_LOWER" -> let (string:_)        = params in CpBuiltinToLower string;
+        "LENGTH" -> let (string:_)          = params in CpBuiltinLength string;
+        "LEFT" -> let (string:count:_)      = params in CpBuiltinLeft string count;
+        "RIGHT" -> let (string:count:_)     = params in CpBuiltinRight string count;
+        "MID" -> let (string:start:count:_) = params in CpBuiltinMid string start count;
+        "NUM_TO_STRING" -> let (expr:_)     = params in CpBuiltinNumToString expr;
+        -- Special built-in functions
+        "EOF" -> let (path:_) = params in CpBuiltinEof path;
+        "RAND" -> CpBuiltinRand;
+        -- Not built-in
+        _ -> CpFunction f params;
+    })
     <$> (cpVariableP <* manySpaceP
     <* charP '(' <* manySpaceP)
     <*> (parametersP <* manySpaceP
@@ -573,7 +571,7 @@ cpDefineFunction =
             _ -> case fromJust maybeSignature of {
                 Nothing -> CpDefineFunction name [] returnType clause;
                 _ -> CpDefineFunction
-                        name (fromJust $ fromJust maybeSignature) returnType clause
+                    name (fromJust $ fromJust maybeSignature) returnType clause
             }
     })
     <$> manySpaceP

@@ -18,51 +18,51 @@ import Data.List (nub, intercalate)
 -- Syntax tree
 
 data CpExpr
-    = CpInt String
-    | CpFloat String String
-    | CpString String
-    | CpChar Char
+    = CpInt      String
+    | CpFloat    String String
+    | CpString   String
+    | CpChar     Char
     | CpTrue
     | CpFalse
     | CpVariable String
     | CpFunction String [CpExpr]
 
-    | CpAdd CpExpr CpExpr       -- +
-    | CpSubtract CpExpr CpExpr  -- -
-    | CpMultiply CpExpr CpExpr  -- *
-    | CpDivide CpExpr CpExpr    -- /
+    | CpAdd       CpExpr CpExpr -- +
+    | CpSubtract  CpExpr CpExpr -- -
+    | CpMultiply  CpExpr CpExpr -- *
+    | CpDivide    CpExpr CpExpr -- /
     | CpIntDivide CpExpr CpExpr -- DIV
-    | CpModulus CpExpr CpExpr   -- MOD
-    | CpPower CpExpr CpExpr     -- ^
+    | CpModulus   CpExpr CpExpr -- MOD
+    | CpPower     CpExpr CpExpr -- ^
 
     | CpNot CpExpr              -- NOT
     | CpAnd CpExpr CpExpr       -- AND
-    | CpOr CpExpr CpExpr        -- OR
+    | CpOr  CpExpr CpExpr       -- OR
 
     | CpNegative CpExpr         -- -
 
-    | CpLess CpExpr CpExpr          -- <
-    | CpGreater CpExpr CpExpr       -- >
-    | CpLessEqual CpExpr CpExpr     -- <=
-    | CpGreaterEqual CpExpr CpExpr  -- >=
-    | CpEqual CpExpr CpExpr         -- =
-    | CpNotEqual CpExpr CpExpr      -- <>
+    | CpLess         CpExpr CpExpr -- <
+    | CpGreater      CpExpr CpExpr -- >
+    | CpLessEqual    CpExpr CpExpr -- <=
+    | CpGreaterEqual CpExpr CpExpr -- >=
+    | CpEqual        CpExpr CpExpr -- =
+    | CpNotEqual     CpExpr CpExpr -- <>
     
-    | CpIndex CpExpr [CpExpr]
+    | CpIndex         CpExpr [CpExpr]
     | CpTakeAttribute CpExpr CpExpr
 
     -- Built-in functions
-    | CpBuiltinInt CpExpr
-    | CpBuiltinChr CpExpr
-    | CpBuiltinAsc CpExpr
-    | CpBuiltinLcase CpExpr
-    | CpBuiltinUcase CpExpr
-    | CpBuiltinToUpper CpExpr
-    | CpBuiltinToLower CpExpr
-    | CpBuiltinLength CpExpr
-    | CpBuiltinLeft CpExpr CpExpr
-    | CpBuiltinRight CpExpr CpExpr
-    | CpBuiltinMid CpExpr CpExpr CpExpr
+    | CpBuiltinInt         CpExpr
+    | CpBuiltinChr         CpExpr
+    | CpBuiltinAsc         CpExpr
+    | CpBuiltinLcase       CpExpr
+    | CpBuiltinUcase       CpExpr
+    | CpBuiltinToUpper     CpExpr
+    | CpBuiltinToLower     CpExpr
+    | CpBuiltinLength      CpExpr
+    | CpBuiltinLeft        CpExpr CpExpr
+    | CpBuiltinRight       CpExpr CpExpr
+    | CpBuiltinMid         CpExpr CpExpr CpExpr
     | CpBuiltinNumToString CpExpr
     -- Special built-in functions
     | CpBuiltinEof CpExpr
@@ -75,7 +75,7 @@ data CpType
     | CpTypeBoolean
     | CpTypeString
     | CpTypeChar
-    | CpTypeArray [(CpExpr, CpExpr)] CpType
+    | CpTypeArray  [(CpExpr, CpExpr)] CpType
     | CpTypeCustom CpExpr
     deriving Show
 
@@ -86,17 +86,17 @@ data FileMode
     deriving Show
 
 data CpStatement
-    = CpAssign CpExpr CpExpr
-    | CpDeclare CpExpr CpType
-    | CpInput CpExpr
-    | CpOutput [CpExpr]
-    | CpEnumerated CpExpr [CpExpr]
+    = CpAssign       CpExpr CpExpr
+    | CpDeclare      CpExpr CpType
+    | CpInput        CpExpr
+    | CpOutput       [CpExpr]
+    | CpEnumerated   CpExpr [CpExpr]
     | CpFunctionCall CpExpr
-    | CpReturn CpExpr
-    | CpOpen CpExpr FileMode
-    | CpWrite CpExpr CpExpr
-    | CpRead CpExpr CpExpr
-    | CpClose CpExpr
+    | CpReturn       CpExpr
+    | CpOpen         CpExpr FileMode
+    | CpWrite        CpExpr CpExpr
+    | CpRead         CpExpr CpExpr
+    | CpClose        CpExpr
     | CpBlankLine
     deriving Show
 
@@ -147,24 +147,24 @@ instance Ord CpExpr where
 instance HasPriority CpExpr where
     priority :: CpExpr -> Integer
     priority (CpTakeAttribute{}) = 1
-    priority (CpIndex{}) = 1
-    priority (CpNot{}) = 2
-    priority (CpNegative{}) = 2
-    priority (CpPower{}) = 3
-    priority (CpMultiply{}) = 4
-    priority (CpDivide{}) = 4
-    priority (CpModulus{}) = 4
-    priority (CpIntDivide{}) = 4
-    priority (CpAdd{}) = 5
-    priority (CpSubtract{}) = 5
-    priority (CpLess{}) = 6
-    priority (CpGreater{}) = 6
-    priority (CpLessEqual{}) = 6
-    priority (CpGreaterEqual{}) = 6
-    priority (CpEqual{}) = 7
-    priority (CpNotEqual{}) = 7
-    priority (CpAnd{}) = 8
-    priority (CpOr{}) = 9
+    priority (CpIndex{})         = 1
+    priority (CpNot{})           = 2
+    priority (CpNegative{})      = 2
+    priority (CpPower{})         = 3
+    priority (CpMultiply{})      = 4
+    priority (CpDivide{})        = 4
+    priority (CpModulus{})       = 4
+    priority (CpIntDivide{})     = 4
+    priority (CpAdd{})           = 5
+    priority (CpSubtract{})      = 5
+    priority (CpLess{})          = 6
+    priority (CpGreater{})       = 6
+    priority (CpLessEqual{})     = 6
+    priority (CpGreaterEqual{})  = 6
+    priority (CpEqual{})         = 7
+    priority (CpNotEqual{})      = 7
+    priority (CpAnd{})           = 8
+    priority (CpOr{})            = 9
     priority _ = 0
 
 
