@@ -287,13 +287,13 @@ cpAssignP =
 cpOutputP :: Parser CpStatement
 cpOutputP =
     CpOutput
-    <$> (strP "OUTPUT" *> manySpaceP
+    <$> ((strP "OUTPUT" <|> strP "PRINT") *> manySpaceP
     *> parametersP)
 
 cpInputP :: Parser CpStatement
 cpInputP =
     CpInput
-    <$> (strP "INPUT" *> manySpaceP
+    <$> ((strP "INPUT" <|> strP "READ") *> manySpaceP
     *> cpExprP)
 
 cpReturnP :: Parser CpStatement

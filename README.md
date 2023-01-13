@@ -64,8 +64,8 @@ then `hello.whatever.py` will be generated.
 
 - [x] Assignment
 - [x] `DECLARE`
-- [x] `INPUT`
-- [x] `OUTPUT`
+- [x] `INPUT` / `READ`
+- [x] `OUTPUT` / `PRINT`
 - [x] `RETURN`
 - [x] `CALL`
 
