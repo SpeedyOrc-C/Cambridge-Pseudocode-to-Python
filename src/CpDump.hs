@@ -6,6 +6,8 @@ import CpParser (identifier)
 import MyParser (Parser(run))
 
 import Data.List (intercalate, intersperse)
+import Data.Bifunctor ( Bifunctor(first) )
+
 
 class DumpPython program where
     dump :: (State, program) -> (State, String)
@@ -152,6 +154,36 @@ instance DumpPython CpFlow where
                 indent indentation ++ "else:\n" ++
                     elseClauseOutput ++
                 afterEndIfOutput
+    
+    dump(   state@(State indentation),
+            CpFlow ((CpCase matchBody cases):tail)) =
+        (state, output)
+        where
+            (firstPredicate, firstClause):tailCases =
+                first (matchToExpr matchBody) <$> cases
+
+            (_, firstClauseOutput) = dump (State (indentation+1), firstClause)
+            firstOutput =
+                indent indentation ++
+                -- Add 2 more spaces for the first case to align with
+                -- tail cases (which start with "elif")
+                "if   " ++ dumpE firstPredicate ++ ":\n" ++ firstClauseOutput
+            
+            tailOutput =
+                concatMap
+                (\(predicate, clause) -> 
+                    let (_, clauseOutput) =
+                            dump (State (indentation+1), clause) in
+                    indent indentation ++
+                    (if predicate /= CpTrue
+                        then "elif " ++ dumpE predicate
+                        else "else") ++
+                    ":\n" ++ clauseOutput)
+                tailCases
+
+            (_, afterCaseOutput) = dump (state, CpFlow tail)
+
+            output = firstOutput ++ tailOutput ++ afterCaseOutput
 
     dump (  state@(State indentation),
             CpFlow ((CpWhile condition loopClause):tail)) =

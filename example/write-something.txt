@@ -1,0 +1,6 @@
+OPENFILE "hello.txt" FOR READ
+WHILE NOT EOF("hello.txt") DO
+    READFILE "hello.txt", line
+    OUTPUT line
+ENDWHILE
+CLOSEFILE "hello.txt"

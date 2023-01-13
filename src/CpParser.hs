@@ -428,6 +428,42 @@ cpIfElseP =
     <*> strP "ENDIF" <*> manySpaceP
     <*> lineBreak
 
+cpCaseP :: Parser CpFlow
+cpCaseP =
+    CpCase
+    <$> (manySpaceP
+    *> strP "CASE" *> whiteSpaces
+    *> strP "OF" *> whiteSpaces
+    *> cpExprP <* manySpaceP <* lineBreak)
+    <*> many (
+        (,)
+        <$> (manySpaceP
+        *> (cpMatchPredicateP <* whiteSpaces
+        <* charP ':' <* whiteSpaces))
+        <*> cpFlowP <* manySpaceP)
+    <* strP "ENDCASE" <* manySpaceP
+    <* lineBreak
+
+cpMatchPredicateP :: Parser CpMatchPredicate
+cpMatchPredicateP = 
+    -- Don't change the order. Because "value" can be a part of "number range"
+        cpMatchOtherwiseP
+    <|> cpMatchNumberRange
+    <|> cpMatchValueP
+
+cpMatchValueP :: Parser CpMatchPredicate
+cpMatchValueP = CpMatchValue <$> cpExprP
+
+cpMatchNumberRange :: Parser CpMatchPredicate
+cpMatchNumberRange =
+    CpMatchNumberRange
+    <$> cpExprP <*> (whiteSpaces
+    *> strP "TO" *> whiteSpaces
+    *> cpExprP)
+
+cpMatchOtherwiseP :: Parser CpMatchPredicate
+cpMatchOtherwiseP = CpMatchOtherwise <$ strP "OTHERWISE"
+
 cpWhileP :: Parser CpFlow
 cpWhileP =
     (\_ _ _ condition _ _ _ loopClause _ _ _ _ ->
@@ -559,6 +595,7 @@ cpFlowP = CpFlow
     <$> many (
             cpIfP
         <|> cpIfElseP
+        <|> cpCaseP
         <|> cpWhileP
         <|> cpRepeatP
         <|> cpForP

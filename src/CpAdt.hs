@@ -4,8 +4,10 @@ module CpAdt (
     FileMode(..),
     CpStatement(..),
     CpFlow(..),
+    CpMatchPredicate(..),
     getSpecial,
     getImplementation,
+    matchToExpr,
 ) where
 
 
@@ -98,18 +100,34 @@ data CpStatement
     | CpBlankLine
     deriving Show
 
+data CpMatchPredicate
+    = CpMatchValue       CpExpr
+    | CpMatchNumberRange CpExpr CpExpr
+    | CpMatchOtherwise
+    deriving Show
+
+-- Transform CASE's predicate to logic expression
+matchToExpr :: CpExpr -> CpMatchPredicate -> CpExpr
+matchToExpr expr1 (CpMatchValue expr2) =
+    expr1 `CpEqual` expr2
+matchToExpr expr (CpMatchNumberRange lower upper) =
+    (lower `CpLessEqual` expr) `CpAnd` (expr `CpGreaterEqual` upper)
+-- This should not be used, as the final "OTHERWISE" should be translated as "else"
+matchToExpr _ CpMatchOtherwise = CpTrue
+
 data CpFlow
-    = CpFlow [CpFlow]
+    = CpFlow            [CpFlow]
     | CpSingleStatement CpStatement
-    | CpIf CpExpr CpFlow
-    | CpIfElse CpExpr CpFlow CpFlow
-    | CpWhile CpExpr CpFlow
-    | CpRepeat CpFlow CpExpr
-    | CpFor CpExpr CpExpr CpExpr CpFlow
-    | CpForStep CpExpr CpExpr CpExpr CpExpr CpFlow
-    | CpDefineStruct CpExpr CpFlow
+    | CpIf              CpExpr CpFlow
+    | CpIfElse          CpExpr CpFlow CpFlow
+    | CpCase            CpExpr [(CpMatchPredicate, CpFlow)]
+    | CpWhile           CpExpr CpFlow
+    | CpRepeat          CpFlow CpExpr
+    | CpFor             CpExpr CpExpr CpExpr CpFlow
+    | CpForStep         CpExpr CpExpr CpExpr CpExpr CpFlow
+    | CpDefineStruct    CpExpr CpFlow
     | CpDefineProcedure CpExpr [(CpExpr, CpType)] CpFlow
-    | CpDefineFunction CpExpr [(CpExpr, CpType)] CpType CpFlow
+    | CpDefineFunction  CpExpr [(CpExpr, CpType)] CpType CpFlow
     deriving Show
 
 

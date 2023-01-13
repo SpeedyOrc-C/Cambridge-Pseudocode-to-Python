@@ -77,7 +77,8 @@ then `hello.whatever.py` will be generated.
 - [x] `REPEAT UNTIL`
 - [x] `FOR TO NEXT` / `FOR TO ENDFOR`
 - [x] `FOR TO STEP NEXT` / `FOR TO STEP ENDFOR`
-- [ ] `CASE OF OTHERWISE ENDCASE`
+- [x] `CASE OF OTHERWISE ENDCASE`
+- [x] Predicate `TO` in `CASE`
 
 ### Subroutine
 

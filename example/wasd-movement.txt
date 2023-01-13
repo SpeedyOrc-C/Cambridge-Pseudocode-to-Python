@@ -1,0 +1,19 @@
+DECLARE x : INTEGER
+DECLARE y : INTEGER
+DECLARE key : CHAR
+
+x <- 0
+y <- 0
+
+REPEAT
+    INPUT key
+    key <- TO_LOWER(key)
+    CASE OF key
+        'w' : y <- y + 1
+        'a' : x <- x - 1
+        's' : y <- y - 1
+        'd' : x <- x + 1
+        OTHERWISE : OUTPUT "Invalid movement."
+    ENDCASE
+    OUTPUT "x =", x, "|", "y =", y
+UNTIL key = 'x'
