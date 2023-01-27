@@ -270,6 +270,8 @@ instance GetSpecialFunctions CpFlow where
             getSpecial condition ++
             getSpecial thenClause ++
             getSpecial elseClause
+    getSpecial (CpCase _ body) =
+        nub $ concatMap (getSpecial . snd) body
     getSpecial (CpWhile condition loopClause) =
         nub $ getSpecial condition ++ getSpecial loopClause
     getSpecial (CpRepeat loopClause condition) =
