@@ -192,8 +192,7 @@ cpCompareP :: Parser CpExpr
 cpCompareP = 
     foldl (flip($)) <$> cpTermP <*> many (
         (\op expr -> case op of {
-            -- "< " must have a space or the translator will recognise it as "<-"
-            "< " -> flip CpLess expr;
+            "<" -> flip CpLess expr;
             ">" -> flip CpGreater expr;
             "<=" -> flip CpLessEqual expr;
             ">=" -> flip CpGreaterEqual expr;
@@ -203,7 +202,7 @@ cpCompareP =
         *> (
                 strP "<="
             <|> strP ">="
-            <|> strP "< " -- So is here
+            <|> strP "<"
             <|> strP ">"
         ))
         <*> (manySpaceP
@@ -278,7 +277,7 @@ cpTypeP =
 cpAssignP :: Parser CpStatement
 cpAssignP =
     CpAssign
-    <$> cpExprP <*> (manySpaceP
+    <$> cpTakeAttributeOrIndexP <*> (manySpaceP
     *> (strP "<-" <|> strP "←") *> manySpaceP
     *> cpExprP)
 
