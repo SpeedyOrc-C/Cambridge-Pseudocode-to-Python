@@ -279,7 +279,7 @@ cpAssignP :: Parser CpStatement
 cpAssignP =
     CpAssign
     <$> cpExprP <*> (manySpaceP
-    *> strP "<-" *> manySpaceP
+    *> (strP "<-" <|> strP "←") *> manySpaceP
     *> cpExprP)
 
 cpOutputP :: Parser CpStatement
