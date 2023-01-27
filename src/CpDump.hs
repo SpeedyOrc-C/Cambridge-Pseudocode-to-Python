@@ -165,9 +165,7 @@ instance DumpPython CpFlow where
             (_, firstClauseOutput) = dump (State (indentation+1), firstClause)
             firstOutput =
                 indent indentation ++
-                -- Add 2 more spaces for the first case to align with
-                -- tail cases (which start with "elif")
-                "if   " ++ dumpE firstPredicate ++ ":\n" ++ firstClauseOutput
+                "if " ++ dumpE firstPredicate ++ ":\n" ++ firstClauseOutput
             
             tailOutput =
                 concatMap
